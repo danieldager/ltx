@@ -386,14 +386,14 @@ def test_column_width_slider_in_screen_percent(browser, copy_doc, serve):
     page.goto(s.url)
     page.wait_for_function("() => window.__ltx && window.__ltx.syncs.size > 0")
     before = doc(page)
-    w = lambda: page.evaluate("() => document.querySelector('.sheet:not([hidden]) .cm-content').getBoundingClientRect().width")
+    w = lambda: (page.wait_for_timeout(250), page.evaluate("() => document.querySelector('.sheet:not([hidden]) .cm-content').getBoundingClientRect().width"))[1]
     setcw = lambda v: page.evaluate("(v) => { const e = document.getElementById('cw'); e.value = v; e.dispatchEvent(new Event('input')); }", v)
     for latex in (True, False):
         if not latex:
             page.click("#latex")
         setcw("100"); w100 = w()
         setcw("50"); w50 = w()
-        assert abs(w50 - 700) < 1 and w100 > w50 + 100, (w50, w100)
+        assert abs(w50 - 700) < 1 and w100 > w50 + 100, (latex, w50, w100, page.evaluate("() => [innerWidth, screen.width, document.querySelector('.sheet:not([hidden]) .cm-scroller').clientWidth, getComputedStyle(document.body).getPropertyValue('--col-w')]"))
         page.set_viewport_size({"width": 1000, "height": 900})
         assert abs(w() - 700) < 1  # same pixel width after the window shrinks
         setcw("100")
@@ -547,3 +547,24 @@ def test_rendered_widgets_fit_the_column(browser, copy_doc, serve):
                 scaled += r["scaled"]
     assert scaled > 0
     page.screenshot(path="/tmp/ltx-shot")
+
+
+def test_mouse_drag_selection_comment_quotes_whole_selection(browser, copy_doc, serve):
+    root = copy_doc("methodology")
+    s = serve(root / "main.tex")
+    page = open_page(browser, s)
+    text = doc(page)
+    i = text.index("This section describes")
+    page.evaluate("(i) => { const v = window.__ltx.view(); v.dispatch({effects: v.constructor.scrollIntoView(i, {y: 'center'})}); }", i)
+    page.wait_for_timeout(300)
+    a, b = page.evaluate("([i, j]) => { const v = window.__ltx.view(); const x = v.coordsAtPos(i), y = v.coordsAtPos(j); return [[x.left + 1, x.top + 5], [y.left, y.top + 5]]; }", [i, i + 40])
+    page.mouse.move(*a); page.mouse.down(); page.mouse.move(a[0] + 50, a[1], steps=4); page.mouse.move(*b, steps=6); page.mouse.up()
+    sel = page.evaluate("() => { const m = window.__ltx.view().state.selection.main; return [m.from, m.to]; }")
+    assert sel[1] - sel[0] > 20
+    page.wait_for_selector(".ltx-selplus")
+    page.click(".ltx-selplus")
+    page.keyboard.type("note")
+    page.keyboard.press("Enter")
+    wait_for(lambda: (root / ".ltxed/comments.json").exists(), what="comments.json")
+    c = read_sidecar(root, "comments.json", "comments")[0]
+    assert c["anchor"]["quote"] == text[sel[0]:sel[1]] and len(c["anchor"]["quote"]) > 20

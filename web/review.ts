@@ -144,7 +144,7 @@ document.addEventListener("mouseout", (e) => {
 });
 
 // selection "+" button
-let plus: HTMLElement | null = null, plusOwner: EditorView | null = null, box: HTMLElement | null = null;
+let plus: HTMLElement | null = null, plusOwner: EditorView | null = null, plusSel = { from: 0, to: 0 }, box: HTMLElement | null = null;
 const hidePlus = () => { plus?.remove(); plus = null; };
 function openComment(view: EditorView, from: number, to: number, r: { left: number; bottom: number }) {
   const doc = view.state.doc, text = doc.toString();
@@ -175,9 +175,10 @@ const selectionPlus = ViewPlugin.fromClass(class {
       write: (r) => {
         if (!r || !r.c) { if (plusOwner === view) hidePlus(); return; }
         plusOwner = view;
+        plusSel = { from: r.from, to: r.to }; // current range, not the one when the button was created
         if (!plus) {
           plus = btn("+", "ltx-selplus", "Comment on the selection", () => {});
-          plus.onmousedown = (e) => { e.preventDefault(); openComment(view, r.from, r.to, plus!.getBoundingClientRect()); };
+          plus.onmousedown = (e) => { e.preventDefault(); openComment(view, plusSel.from, plusSel.to, plus!.getBoundingClientRect()); };
           document.body.append(plus);
         }
         plus.style.left = `${r.c.right + 4}px`;
