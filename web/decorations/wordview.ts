@@ -21,7 +21,7 @@ class Html extends WidgetType {
   toDOM() {
     const e = document.createElement(this.block ? "div" : "span");
     e.className = this.cls;
-    e.innerHTML = this.html;
+    e.innerHTML = this.block && /ltx-(eq|table)/.test(this.cls) ? `<div class="ltx-fit">${this.html}</div>` : this.html;
     e.onmousedown = (ev) => { ev.preventDefault(); e.dispatchEvent(new CustomEvent("ltx-reveal", { bubbles: true })); };
     return e;
   }

@@ -519,3 +519,31 @@ def test_typed_quote_becomes_latex_quotes(browser, copy_doc, serve):
     place(page, k + 2)
     page.keyboard.type('"')
     assert doc(page)[k + 2] == '"'
+
+
+def test_rendered_widgets_fit_the_column(browser, copy_doc, serve):
+    root = copy_doc("methodology")
+    s = serve(root / "main.tex")
+    page = browser.new_page(viewport={"width": 1400, "height": 900}, screen={"width": 1400, "height": 900})
+    page.goto(s.url)
+    page.wait_for_function("() => window.__ltx && window.__ltx.syncs.size > 0")
+    page.click("#latex")
+    page.evaluate("""() => { for (const [id, v] of [['fs', '24'], ['cw', '50']]) {
+        const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event('input')); } }""")
+    scaled = 0
+    for tab in ("sec_validation.tex", "app_b_validation.tex", "app_a_pipeline.tex", "sec_selection.tex"):
+        page.click(f"#tabs button[data-path='{tab}']")
+        text = doc(page, tab)
+        for m in re.finditer(r"\\begin\{(table|longtable|equation|align)", text):
+            page.evaluate("""([p, j]) => { const v = window.__ltx.view(p); v.dispatch({effects: v.constructor.scrollIntoView(j, {y: 'start', yMargin: 80})}); }""", [tab, m.start()])
+            page.wait_for_timeout(250)
+            res = page.evaluate("""() => { const c = document.querySelector('.sheet:not([hidden]) .cm-content').getBoundingClientRect();
+                const pad = parseFloat(getComputedStyle(document.querySelector('.sheet:not([hidden]) .cm-content')).paddingRight);
+                return [...document.querySelectorAll('.sheet:not([hidden]) .ltx-fit')].map(f => ({
+                  over: f.getBoundingClientRect().right - (c.right - pad), floor: f.parentElement.classList.contains('ltx-fit-scroll'),
+                  scaled: f.style.transform !== '' })); }""")
+            for r in res:
+                assert r["over"] <= 1.5 or r["floor"], (tab, r)
+                scaled += r["scaled"]
+    assert scaled > 0
+    page.screenshot(path="/tmp/ltx-shot")

@@ -209,7 +209,7 @@ function updateErr() {
 function slider(id: string, key: string, css: string, conv: (v: number) => string) {
   const el = $(id) as HTMLInputElement;
   try { const s = localStorage.getItem(key); if (s) el.value = s; } catch { /* ignore */ }
-  const apply = () => { document.body.style.setProperty(css, conv(+el.value)); syncs.forEach((s) => s.view.requestMeasure()); };
+  const apply = () => { document.body.style.setProperty(css, conv(+el.value)); syncs.forEach((s) => s.view.requestMeasure()); window.dispatchEvent(new Event("ltx-fit")); };
   el.oninput = () => { apply(); try { localStorage.setItem(key, el.value); } catch { /* ignore */ } };
   apply();
 }

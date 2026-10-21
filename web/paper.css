@@ -57,14 +57,14 @@ body.justify .sheet .ltx-prose, body.justify .sheet .ltx-abstract { text-align: 
 .ltx-li { padding-left: 1.6em !important; }
 .ltx-chip { font-family: var(--mono); font-size: 12px; line-height: 1.4; color: #6c685f; background: #f6f3ec; padding: 2px 8px; margin: .3em 0; }
 .ltx-im .katex { font-size: 1em; }
-.ltx-eq { margin: .2em 0; overflow-x: auto; }
+.ltx-eq { margin: .2em 0; }
 .ltx-eq .katex-display { margin: .5em 0; }
 .ltx-mac { }
 .ltx-titleblock { text-align: center; padding: .3em 0 1em; }
 .ltx-t-title { font-size: 1.6em; line-height: 1.25; font-weight: 700; }
 .ltx-t-author { font-size: 1.1em; margin-top: .6em; }
 .ltx-t-date { margin-top: .4em; }
-.ltx-table { overflow-x: auto; }
+
 .ltx-tblwrap { display: table; margin: .6em auto; max-width: 100%; }
 .ltx-tcap { display: table-caption; caption-side: top; text-align: center; font-size: .9em; margin-bottom: .3em; }
 .ltx-tbl { border-collapse: collapse; font-size: .85em; margin: 0 auto; border-top: 1.5px solid #222; border-bottom: 1.5px solid #222; }
@@ -90,3 +90,5 @@ body.justify .sheet .ltx-prose, body.justify .sheet .ltx-abstract { text-align: 
 .ltx-pop-in { font: inherit; width: 280px; border: 1px solid #cfcbc2; border-radius: 4px; padding: 2px 6px; }
 .ltx-selplus { position: fixed; z-index: 40; width: 20px; height: 20px; border-radius: 50%; background: #000; color: #fff; border: 0; cursor: pointer;
   font: 700 14px/18px sans-serif; padding: 0; }
+.ltx-eq.ltx-fit-scroll, .ltx-table.ltx-fit-scroll { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+.ltx-eq, .ltx-table { overflow: hidden; }
