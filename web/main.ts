@@ -204,15 +204,16 @@ function updateErr() {
 }
 
 // view-only sliders: font size and text column width
-function slider(id: string, key: string, css: string, unit: string) {
+function slider(id: string, key: string, css: string, conv: (v: number) => string) {
   const el = $(id) as HTMLInputElement;
   try { const s = localStorage.getItem(key); if (s) el.value = s; } catch { /* ignore */ }
-  const apply = () => { document.body.style.setProperty(css, el.value + unit); syncs.forEach((s) => s.view.requestMeasure()); };
+  const apply = () => { document.body.style.setProperty(css, conv(+el.value)); syncs.forEach((s) => s.view.requestMeasure()); };
   el.oninput = () => { apply(); try { localStorage.setItem(key, el.value); } catch { /* ignore */ } };
   apply();
 }
-slider("fs", "ltx.fs", "--fs", "px");
-slider("cw", "ltx.cw", "--text-w", "in");
+slider("fs", "ltx.fs", "--fs", (v) => `${v}px`);
+document.body.style.setProperty("--col-min", `${Math.round(window.screen.width / 2)}px`); // floor: never narrower than 50% of the screen
+slider("cw", "ltx.cw2", "--col-w", (v) => `${Math.round(window.screen.width * v / 100)}px`); // % of the physical screen, capped by max-width:100%
 
 // click a rendered block/inline widget: show the LaTeX and put the cursor at its source
 $("sheets").addEventListener("ltx-reveal", (ev) => {

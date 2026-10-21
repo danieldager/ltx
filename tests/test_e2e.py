@@ -338,10 +338,10 @@ def test_sliders_are_view_only(browser, copy_doc, serve):
     s = serve(root / "main.tex")
     page = open_page(browser, s)
     before = doc(page)
-    page.evaluate("""() => { for (const [id, v] of [['fs', '22'], ['cw', '8']]) {
+    page.evaluate("""() => { for (const [id, v] of [['fs', '22'], ['cw', '80']]) {
         const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event('input')); } }""")
     assert page.evaluate("() => getComputedStyle(document.querySelector('.sheet .cm-scroller')).fontSize") == "22px"
-    assert page.evaluate("() => document.body.style.getPropertyValue('--text-w')") == "8in"
+    assert page.evaluate("() => document.body.style.getPropertyValue('--col-w')") == f"{round(page.evaluate('screen.width') * .8)}px"
     assert page.evaluate("() => localStorage.getItem('ltx.fs')") == "22"
     assert doc(page) == before
     page.reload()
@@ -377,3 +377,29 @@ def test_ltx_stop_kills_server_and_clears_session(copy_doc):
     assert not sj.exists()
     with pytest.raises(ProcessLookupError):
         os.kill(pid, 0)
+
+
+def test_column_width_slider_in_screen_percent(browser, copy_doc, serve):
+    root = copy_doc("methodology")
+    s = serve(root / "main.tex")
+    page = browser.new_page(viewport={"width": 1400, "height": 900}, screen={"width": 1400, "height": 900})
+    page.goto(s.url)
+    page.wait_for_function("() => window.__ltx && window.__ltx.syncs.size > 0")
+    before = doc(page)
+    w = lambda: page.evaluate("() => document.querySelector('.sheet:not([hidden]) .cm-content').getBoundingClientRect().width")
+    setcw = lambda v: page.evaluate("(v) => { const e = document.getElementById('cw'); e.value = v; e.dispatchEvent(new Event('input')); }", v)
+    for latex in (True, False):
+        if not latex:
+            page.click("#latex")
+        setcw("100"); w100 = w()
+        setcw("50"); w50 = w()
+        assert abs(w50 - 700) < 1 and w100 > w50 + 100, (w50, w100)
+        page.set_viewport_size({"width": 1000, "height": 900})
+        assert abs(w() - 700) < 1  # same pixel width after the window shrinks
+        setcw("100")
+        assert w() <= 1000
+        page.set_viewport_size({"width": 600, "height": 900})  # narrower than the 50% floor
+        assert abs(w() - 700) < 1
+        assert page.evaluate("() => { const e = document.querySelector('.sheet:not([hidden]) .cm-scroller'); return e.scrollWidth > e.clientWidth; }")
+        page.set_viewport_size({"width": 1400, "height": 900})
+    assert doc(page) == before
