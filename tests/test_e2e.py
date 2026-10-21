@@ -5,6 +5,7 @@ import re
 import os
 import signal
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -282,3 +283,97 @@ def test_latex_toggle_keeps_doc_and_typing_hits_source(browser, copy_doc, serve)
     assert doc(page) == before
     page.click("#latex")
     assert doc(page) == before
+
+
+def test_rendered_math_and_tables_keep_doc_identical_and_click_reveals(browser, copy_doc, serve):
+    root = copy_doc("methodology")
+    s = serve(root / "main.tex")
+    page = open_page(browser, s)
+    page.click("#tabs button[data-path='sec_validation.tex']")
+    before = doc(page, "sec_validation.tex")
+    page.click("#latex")
+    page.wait_for_selector(".ltx-table table.ltx-tbl", state="attached")
+    page.wait_for_selector(".ltx-mac", state="attached", timeout=60000)  # macros arrive with the first compile
+    assert page.locator(".ltx-im .katex").count() > 0
+    assert page.locator(".ltx-table td").count() > 5
+    assert doc(page, "sec_validation.tex") == before
+    j = re.search(r"\\begin\{(long)?table", before).start()
+    page.evaluate("""(j) => { const v = window.__ltx.view('sec_validation.tex'); v.dispatch({effects: v.constructor.scrollIntoView(j, {y: 'start', yMargin: 100})}); }""", j)
+    page.wait_for_timeout(500)
+    page.locator(".sheet:not([hidden]) .ltx-table").first.click()  # click reveals the source at that block
+    assert page.evaluate("() => document.body.classList.contains('word')") is False
+    head = cursor(page, "sec_validation.tex")
+    assert re.match(r"\\begin\{(long)?table|\\begin\{tabular|\\begin\{threepart", before[head:head + 30])
+    assert doc(page, "sec_validation.tex") == before
+
+
+def top_y(page):
+    return page.evaluate("() => { const v = window.__ltx.view(); return v.coordsAtPos(v.state.selection.main.head).top; }")
+
+
+def test_toggle_keeps_cursor_line_in_place(browser, copy_doc, serve):
+    root = copy_doc("methodology")
+    s = serve(root / "main.tex")
+    page = open_page(browser, s)
+    page.wait_for_timeout(1500)
+    text = doc(page)
+    i = text.index("This section describes")
+    page.evaluate("""(i) => { const v = window.__ltx.view(); v.focus();
+        v.dispatch({selection: {anchor: i}, effects: v.constructor.scrollIntoView(i, {y: 'start', yMargin: 300})}); }""", i)
+    page.wait_for_timeout(500)
+    y0 = top_y(page)
+    page.click("#latex")
+    page.wait_for_timeout(1500)
+    y1 = top_y(page)
+    page.click("#latex")
+    page.wait_for_timeout(1500)
+    y2 = top_y(page)
+    print(y0, y1, y2)
+    assert abs(y1 - y0) <= 2 and abs(y2 - y0) <= 2
+    assert cursor(page) == i and doc(page) == text
+
+
+def test_sliders_are_view_only(browser, copy_doc, serve):
+    root = copy_doc("methodology")
+    s = serve(root / "main.tex")
+    page = open_page(browser, s)
+    before = doc(page)
+    page.evaluate("""() => { for (const [id, v] of [['fs', '22'], ['cw', '8']]) {
+        const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event('input')); } }""")
+    assert page.evaluate("() => getComputedStyle(document.querySelector('.sheet .cm-scroller')).fontSize") == "22px"
+    assert page.evaluate("() => document.body.style.getPropertyValue('--text-w')") == "8in"
+    assert page.evaluate("() => localStorage.getItem('ltx.fs')") == "22"
+    assert doc(page) == before
+    page.reload()
+    page.wait_for_function("() => window.__ltx && window.__ltx.syncs.size > 0")
+    assert page.evaluate("() => document.getElementById('fs').value") == "22"
+
+
+def test_pdf_error_marker_when_pane_hidden(browser, copy_doc, serve):
+    root = copy_doc("short")
+    s = serve(root / "main.tex")
+    wait_for(lambda: (root / ".ltxed/compile_errors.json").exists(), timeout=60, what="first compile")
+    page = open_page(browser, s, pdf=False)
+    src = (root / "main.tex").read_text()
+    (root / "main.tex").write_text(src.replace("\\end{document}", "\\begin{itemize}\n\\item x\n\\end{document}", 1))
+    wait_for(lambda: s.compile_state()["state"] == "error", timeout=60, what="failed compile")
+    page.wait_for_selector("#pdf-err:not([hidden])")
+    assert "PDF build failed (" in page.locator("#pdf-err").inner_text()
+    page.click("#pdf-err")
+    assert page.locator("#pdf-pane").is_visible()
+    assert page.locator("#pdf-err").is_hidden()
+
+
+def test_ltx_stop_kills_server_and_clears_session(copy_doc):
+    root = copy_doc("short")
+    env = dict(os.environ)
+    out = subprocess.run([sys.executable, "-m", "ltx.cli", "open", str(root / "main.tex"), "--no-browser"],
+                         capture_output=True, text=True, env=env, timeout=60)
+    assert out.returncode == 0, out.stderr
+    sj = root / ".ltxed" / "session.json"
+    pid = json.loads(sj.read_text())["pid"]
+    st = subprocess.run([sys.executable, "-m", "ltx.cli", "stop", str(root)], capture_output=True, text=True, timeout=30)
+    assert st.returncode == 0, st.stderr
+    assert not sj.exists()
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)

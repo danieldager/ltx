@@ -35,6 +35,10 @@ body.no-pdf #pdf-pane, body.no-pdf #split { display: none; }
 .error-row button { font-size: 11px; }
 #banner { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 10; background: #1b1b1b; color: #fff; padding: 4px 12px; border-radius: 12px; }
 #replaced { background: #f6efd9; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+#pdf-err { background: #f7e1df !important; color: #6d1a1a; border-color: #a12a2a !important; }
+#pdf-err[hidden] { display: none; }
+.sl { display: flex; align-items: center; gap: 3px; color: var(--muted); }
+.sl input { width: 70px; }
 
 /* Paper look (owned by phase 2). Latin Modern from tectonic's bundle (GUST font licence). */
 @font-face { font-family: "LM Roman"; src: url(/static/fonts/lmroman12-regular.woff2) format("woff2"); font-weight: 400; font-style: normal; }
@@ -47,7 +51,7 @@ body.no-pdf #pdf-pane, body.no-pdf #split { display: none; }
 :root { --paper: #fffdf8; --text-w: 6.5in; --serif: "LM Roman", "Latin Modern Roman", "CMU Serif", Georgia, serif;
   --mono: "LM Mono", Menlo, monospace; --mute: #a39f96; }
 
-.sheet .cm-scroller { font-family: var(--serif); font-size: 17px; line-height: 1.55; padding: 28px 0 40vh; }
+.sheet .cm-scroller { font-family: var(--serif); font-size: var(--fs, 17px); line-height: 1.55; padding: 28px 0 90vh; }
 .sheet .cm-content { width: calc(var(--text-w) + 2in); max-width: 100%; margin: 0 auto; padding: 1in;
   background: var(--paper); box-shadow: 0 1px 6px rgba(0,0,0,.18); min-height: 11in; caret-color: #000; }
 .sheet .cm-editor.cm-focused { outline: none; }
@@ -94,3 +98,19 @@ body.justify .sheet .ltx-prose, body.justify .sheet .ltx-abstract { text-align: 
 .ltx-bullet { font-weight: 700; }
 .ltx-li { padding-left: 1.6em !important; }
 .ltx-chip { font-family: var(--mono); font-size: 12px; line-height: 1.4; color: #6c685f; background: #f6f3ec; padding: 2px 8px; margin: .3em 0; }
+.ltx-im .katex { font-size: 1em; }
+.ltx-eq { margin: .2em 0; overflow-x: auto; }
+.ltx-eq .katex-display { margin: .5em 0; }
+.ltx-mac { }
+.ltx-titleblock { text-align: center; padding: .3em 0 1em; }
+.ltx-t-title { font-size: 1.6em; line-height: 1.25; font-weight: 700; }
+.ltx-t-author { font-size: 1.1em; margin-top: .6em; }
+.ltx-t-date { margin-top: .4em; }
+.ltx-tblwrap { margin: .6em 0; overflow-x: auto; }
+.ltx-tcap { font-size: .9em; margin-bottom: .3em; }
+.ltx-tbl { border-collapse: collapse; font-size: .85em; margin: 0 auto; border-top: 1.5px solid #222; border-bottom: 1.5px solid #222; }
+.ltx-tbl th, .ltx-tbl td { padding: 2px 10px; line-height: 1.35; vertical-align: top; }
+.ltx-tbl th { font-weight: 700; }
+.ltx-tbl.has-head tr:has(+ tr td) th { border-bottom: 1px solid #222; }
+.ltx-tnotes { font-size: .78em; color: #555; margin-top: .3em; }
+.ltx-chip, .ltx-table, .ltx-eq, .ltx-im, .ltx-mac { cursor: pointer; }

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import signal
 import shutil
 import subprocess
 import sys
@@ -49,6 +51,23 @@ def cmd_open(a) -> None:
         webbrowser.open(s["url"])
 
 
+def cmd_stop(a) -> None:
+    p = Path(a.path).expanduser().resolve()
+    root = p if p.is_dir() else p.parent
+    s = sidecar.live_session(root)
+    sj = root / ".ltxed" / "session.json"
+    if not s:
+        sj.unlink(missing_ok=True)
+        sys.exit(f"ltx: no live server for {root}")
+    os.kill(s["pid"], signal.SIGTERM)
+    for _ in range(100):
+        if not sidecar.pid_alive(s["pid"]):
+            break
+        time.sleep(0.05)
+    sj.unlink(missing_ok=True)
+    print(f"stopped {s['url']}")
+
+
 def cmd_new(a) -> None:
     p = Path(a.path).expanduser().resolve()
     tex = p if p.suffix == ".tex" else p / "main.tex"
@@ -82,6 +101,9 @@ def main() -> None:
     n.add_argument("--open", action="store_true", help="open it afterwards")
     n.add_argument("--no-browser", action="store_true")
     n.set_defaults(fn=cmd_new)
+    st = sub.add_parser("stop", help="stop the server for a document folder")
+    st.add_argument("path", nargs="?", default=".")
+    st.set_defaults(fn=cmd_stop)
     sv = sub.add_parser("serve", help="run the server in the foreground")
     sv.add_argument("path")
     sv.add_argument("--port", type=int, default=0)

@@ -10,6 +10,7 @@ import { renderErrors } from "./errors";
 import { selectionExtension } from "./selection";
 import { showComments } from "./comments";
 import { setWord } from "./decorations/index";
+import { setMacros, visiblePos } from "./decorations/wordview";
 
 const $ = (id: string) => document.getElementById(id)!;
 const syncs = new Map<string, FileSync>();
@@ -17,7 +18,7 @@ const hosts = new Map<string, HTMLElement>();
 let active = "";
 let ws: WebSocket;
 let index: IndexMsg | null = null;
-const indexListeners: ((i: IndexMsg) => void)[] = [];
+const indexListeners: ((i: IndexMsg) => void)[] = [(i) => { setMacros(i.macros); if (word) syncs.forEach((s) => s.view.dispatch({ effects: setWord.of(true) })); }];
 const pdf = new PdfPane($("pdf-scroll"));
 let lastCompile: CompileMsg | null = null;
 let word = false; // LaTeX markup hidden
@@ -106,6 +107,7 @@ function onCompile(m: CompileMsg) {
   st.textContent = m.state === "running" ? "Building PDF…" : m.state === "ok" ? `PDF up to date${m.duration_ms ? ` (${(m.duration_ms / 1000).toFixed(1)} s)` : ""}` : "PDF build failed";
   st.className = `compile-${m.state}`;
   if (m.state !== "running") renderErrors($("errors"), m, jump);
+  updateErr();
   if (m.pdf_url && m.state !== "running" && pdfOn) pdf.show(m.pdf_url, m.rev);
 }
 
@@ -146,19 +148,80 @@ function toggle(btn: string, key: string, dflt: boolean, apply: (v: boolean) => 
   let v = dflt;
   try { const s = localStorage.getItem(key); if (s !== null) v = s === "1"; } catch { /* ignore */ }
   const set = (x: boolean) => { v = x; $(btn).classList.toggle("on", x); apply(x); };
+  const user = (x: boolean) => { set(x); try { localStorage.setItem(key, x ? "1" : "0"); } catch { /* ignore */ } };
   set(v);
-  $(btn).onclick = () => { set(!v); try { localStorage.setItem(key, v ? "1" : "0"); } catch { /* ignore */ } };
+  $(btn).onclick = () => user(!v);
+  return user;
 }
-toggle("justify", "ltx.justify", false, (v) => document.body.classList.toggle("justify", v));
-toggle("latex", "ltx.latex", true, (v) => {
-  word = !v;
+
+// Keep the cursor line (or, off-screen, the top visible line) at the same viewport offset across `fn`.
+function anchored(view: EditorView | undefined, fn: () => void) {
+  if (!view) return fn();
+  const sc = view.scrollDOM, top = sc.getBoundingClientRect().top, head = view.state.selection.main.head;
+  const y = (p: number) => { const c = view.coordsAtPos(p); return (c ? c.top : view.documentTop + view.lineBlockAt(p).top) - top; };
+  let pos = head, off = y(head);
+  if (off < 0 || off > sc.clientHeight) {
+    const r = sc.getBoundingClientRect();
+    pos = view.posAtCoords({ x: r.left + r.width / 2, y: top + 4 }, false);
+    off = y(pos);
+  }
+  fn();
+  const fix = (k: number) => view.requestMeasure({
+    read: () => y(pos) - off,
+    write: (dy: number) => { if (Math.abs(dy) > 0.5) sc.scrollTop += dy; if (k > 0) fix(k - 1); },
+  });
+  fix(6);
+}
+
+function setLatex(show: boolean) {
+  word = !show;
   document.body.classList.toggle("word", word);
-  syncs.forEach((s) => s.view.dispatch({ effects: setWord.of(word) }));
-});
-toggle("pdf", "ltx.pdf", false, (v) => {
+  const act = syncs.get(active)?.view;
+  syncs.forEach((s) => {
+    const run = () => {
+      s.view.dispatch({ effects: setWord.of(word) });
+      if (word) {
+        const h = s.view.state.selection.main.head, v = visiblePos(s.view.state, h);
+        if (v !== h) s.view.dispatch({ selection: EditorSelection.cursor(v) });
+      }
+    };
+    s.view === act ? anchored(act, run) : run();
+  });
+}
+const setLatexUser = toggle("latex", "ltx.latex", true, setLatex);
+const setPdfUser = toggle("pdf", "ltx.pdf", false, (v) => {
   pdfOn = v;
   document.body.classList.toggle("no-pdf", !v);
+  updateErr();
   if (v && lastCompile?.pdf_url) requestAnimationFrame(() => { pdf.rev = -1; pdf.show(lastCompile!.pdf_url!, lastCompile!.rev); });
+});
+toggle("justify", "ltx.justify", false, (v) => document.body.classList.toggle("justify", v));
+$("pdf-err").onclick = () => setPdfUser(true);
+function updateErr() {
+  const n = lastCompile?.state === "error" ? lastCompile.errors.filter((e) => e.severity === "error").length : 0;
+  $("pdf-err").hidden = pdfOn || lastCompile?.state !== "error";
+  $("pdf-err").textContent = `PDF build failed (${n})`;
+}
+
+// view-only sliders: font size and text column width
+function slider(id: string, key: string, css: string, unit: string) {
+  const el = $(id) as HTMLInputElement;
+  try { const s = localStorage.getItem(key); if (s) el.value = s; } catch { /* ignore */ }
+  const apply = () => { document.body.style.setProperty(css, el.value + unit); syncs.forEach((s) => s.view.requestMeasure()); };
+  el.oninput = () => { apply(); try { localStorage.setItem(key, el.value); } catch { /* ignore */ } };
+  apply();
+}
+slider("fs", "ltx.fs", "--fs", "px");
+slider("cw", "ltx.cw", "--text-w", "in");
+
+// click a rendered block/inline widget: show the LaTeX and put the cursor at its source
+$("sheets").addEventListener("ltx-reveal", (ev) => {
+  const v = EV.findFromDOM(ev.target as HTMLElement);
+  if (!v) return;
+  const pos = v.posAtDOM(ev.target as HTMLElement);
+  v.dispatch({ selection: EditorSelection.cursor(pos) });
+  setLatexUser(true);
+  v.focus();
 });
 $("zoom-in").onclick = () => { pdf.zoom *= 1.15; if (lastCompile?.pdf_url) pdf.rezoom(lastCompile.pdf_url); };
 $("zoom-out").onclick = () => { pdf.zoom /= 1.15; if (lastCompile?.pdf_url) pdf.rezoom(lastCompile.pdf_url); };

@@ -1,39 +1,38 @@
-// Word-like view: with "LaTeX" off, markup is replaced away and only prose remains. The text
-// is never changed; hidden ranges are atomic so the cursor skips them.
+// Word-like view: with "LaTeX" off, markup is replaced away and only prose remains; math renders
+// with KaTeX, tables as HTML. The text is never changed; hidden ranges are atomic so the cursor
+// skips them. Clicking a rendered widget reveals its source (main.ts handles "ltx-reveal").
 import { EditorState, Range, StateEffect, StateField } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, WidgetType } from "@codemirror/view";
+import { ARGS, CITE, FMT, REF, cached, esc, groupEnd, inl, macroColor, macros, mathHtml, tableHtml } from "./render";
 
+export { setMacros } from "./render";
 export const setWord = StateEffect.define<boolean>();
 
 class Txt extends WidgetType {
-  constructor(readonly text: string, readonly cls: string, readonly block = false) { super(); }
+  constructor(readonly text: string, readonly cls: string) { super(); }
   eq(o: Txt) { return o.text === this.text && o.cls === this.cls; }
-  toDOM() { const e = document.createElement(this.block ? "div" : "span"); e.className = this.cls; e.textContent = this.text; return e; }
+  toDOM() { const e = document.createElement("span"); e.className = this.cls; e.textContent = this.text; return e; }
 }
 
-const CHIP_ENVS = /^(table\*?|figure\*?|longtable|tabular\*?|tabularx|threeparttable|equation\*?|align\*?|gather\*?|multline\*?|eqnarray\*?|verbatim|lstlisting|tikzpicture)$/;
-const FMT: Record<string, string> = { emph: "ltx-w-it", textit: "ltx-w-it", textsl: "ltx-w-it", textbf: "ltx-w-b", textsc: "ltx-w-sc",
-  underline: "ltx-w-u", texttt: "ltx-w-tt", paragraph: "ltx-w-b", subparagraph: "ltx-w-b" };
-const REF = /^(ref|eqref|autoref|cref|Cref|pageref|vref)$/;
-const CITE = /^(cite|citep|citet|citealp|citeauthor|citeyear|parencite|textcite|nocite)$/;
-// hidden with N brace arguments
-const ARGS: Record<string, number> = { label: 1, input: 1, include: 1, includegraphics: 1, lstinputlisting: 1, bibliography: 1, bibliographystyle: 1,
-  usepackage: 1, documentclass: 1, url: 1, nolinkurl: 1, vspace: 1, hspace: 1, setlength: 2, setcounter: 2, addtolength: 2, thispagestyle: 1,
-  pagenumbering: 1, pagestyle: 1, hypersetup: 1, geometry: 1, definecolor: 3, color: 1, pagecolor: 1, textcolor: 1, href: 1, cline: 1 };
-const TOK = /(?<!\\)%.*$|\\\\(?:\[[^\]]*\])?|\\[A-Za-z@]+\*?|\\[^A-Za-z@]|\$[^$]*\$|[{}~]/g;
+class Html extends WidgetType {
+  constructor(readonly html: string, readonly cls: string, readonly block: boolean) { super(); }
+  eq(o: Html) { return o.html === this.html && o.cls === this.cls; }
+  toDOM() {
+    const e = document.createElement(this.block ? "div" : "span");
+    e.className = this.cls;
+    e.innerHTML = this.html;
+    e.onmousedown = (ev) => { ev.preventDefault(); e.dispatchEvent(new CustomEvent("ltx-reveal", { bubbles: true })); };
+    return e;
+  }
+  ignoreEvent() { return true; }
+}
+
+const MATH_ENVS = /^(equation\*?|align\*?|gather\*?|multline\*?|eqnarray\*?)$/;
+const TABLE_ENVS = /^(table\*?|longtable|tabular\*?|tabularx|threeparttable)$/;
+const CHIP_ENVS = /^(figure\*?|verbatim|lstlisting|tikzpicture)$/;
+const TOK = /(?<!\\)%.*$|\\\\(?:\[[^\]]*\])?|\\[A-Za-z@]+\*?|\\[^A-Za-z@]|\$[^$]*\$|[{}~]|``|''|---|--/g;
 const hide = Decoration.replace({});
 const mark = (cls: string) => Decoration.mark({ class: cls });
-
-function groupEnd(doc: string, open: number): number {
-  let depth = 0;
-  for (let i = open; i < doc.length; i++) {
-    const c = doc[i];
-    if (c === "\\") { i++; continue; }
-    if (c === "{") depth++;
-    else if (c === "}" && --depth === 0) return i + 1;
-  }
-  return doc.length;
-}
 
 function chipLabel(env: string, body: string): string {
   const m = /\\caption(?:\[[^\]]*\])?\s*\{/.exec(body);
@@ -44,31 +43,70 @@ function chipLabel(env: string, body: string): string {
   return `[${env.replace("*", "")}: ${cap.length > 90 ? cap.slice(0, 90) + "…" : cap}]`;
 }
 
+function mathSrc(env: string, body: string): string {
+  let s = body.replace(/\\(label|nonumber|notag)(\{[^}]*\})?/g, "").replace(/(?<!\\)%.*$/gm, "");
+  if (/^(align|eqnarray)/.test(env)) s = `\\begin{aligned}${s}\\end{aligned}`;
+  else if (env.startsWith("gather")) s = `\\begin{gathered}${s}\\end{gathered}`;
+  return s;
+}
+
+function titleBlock(pre: string): string {
+  pre = pre.replace(/(?<!\\)%.*$/gm, "");
+  const get = (k: string) => { const m = new RegExp(`\\\\${k}\\s*\\{`).exec(pre); return m ? pre.slice(m.index + m[0].length, groupEnd(pre, m.index + m[0].length - 1) - 1) : ""; };
+  const t = get("title"), a = get("author"), d = get("date");
+  if (!t && !a && !d) return "";
+  return `${t ? `<div class="ltx-t-title">${inl(t)}</div>` : ""}${a ? `<div class="ltx-t-author">${inl(a)}</div>` : ""}${d ? `<div class="ltx-t-date">${inl(d)}</div>` : ""}`;
+}
+
 function build(state: EditorState): DecorationSet {
   const doc = state.doc, text = doc.toString(), out: Range<Decoration>[] = [];
   let pend: [number, number] | null = null; // consecutive fully hidden lines
   const flush = () => { if (pend) out.push(Decoration.replace({ block: true }).range(doc.line(pend[0]).from, doc.line(pend[1]).to)); pend = null; };
   const hideLine = (n: number) => { if (pend && pend[1] === n - 1) pend[1] = n; else { flush(); pend = [n, n]; } };
+  const block = (from: number, to: number, w: Html) => { flush(); out.push(Decoration.replace({ widget: w, block: true }).range(from, to)); };
+  const chip = (label: string) => new Html(esc(label), "ltx-chip", true);
 
   const bd = text.search(/\\begin\{document\}/);
   let n = bd < 0 ? 1 : doc.lineAt(bd).number + 1;
-  if (bd >= 0) pend = [1, n - 1];
+  if (bd >= 0) {
+    const tb = titleBlock(text.slice(0, bd));
+    if (tb) block(0, doc.line(n - 1).to, new Html(tb, "ltx-titleblock", true)); else pend = [1, n - 1];
+  }
   let prevBlank = true; // collapse runs of blank lines
   const lists: { enumerate: boolean; count: number }[] = [];
 
   for (; n <= doc.lines; n++) {
     const ln = doc.line(n), t = ln.text;
     const cb = /^\s*\\begin\{([^}]+)\}/.exec(t);
-    if (cb && CHIP_ENVS.test(cb[1])) {
-      let depth = 0, e = n;
-      const re = new RegExp(`\\\\(begin|end)\\{${cb[1].replace("*", "\\*")}\\}`, "g");
-      for (; e <= doc.lines; e++) {
-        for (const m of doc.line(e).text.matchAll(re)) depth += m[1] === "begin" ? 1 : -1;
-        if (depth <= 0) break;
+    const dm = !cb && /^\s*\\\[/.test(t);
+    const env = cb?.[1];
+    if (dm || (env && (MATH_ENVS.test(env) || TABLE_ENVS.test(env) || CHIP_ENVS.test(env)))) {
+      let e = n;
+      if (dm) { while (e < doc.lines && !doc.line(e).text.includes("\\]")) e++; }
+      else {
+        let depth = 0;
+        const re = new RegExp(`\\\\(begin|end)\\{${env!.replace("*", "\\*")}\\}`, "g");
+        for (; e <= doc.lines; e++) {
+          for (const m of doc.line(e).text.matchAll(re)) depth += m[1] === "begin" ? 1 : -1;
+          if (depth <= 0) break;
+        }
       }
       e = Math.min(e, doc.lines);
-      flush();
-      out.push(Decoration.replace({ widget: new Txt(chipLabel(cb[1], doc.sliceString(ln.from, doc.line(e).to)), "ltx-chip", true), block: true }).range(ln.from, doc.line(e).to));
+      const to = doc.line(e).to, src = doc.sliceString(ln.from, to);
+      let w: Html | null = null;
+      if (dm) {
+        const h = mathHtml(src.replace(/^\s*\\\[/, "").replace(/\\\]\s*$/, ""), true);
+        if (h) w = new Html(h, "ltx-eq", true);
+        w ??= chip("[equation]");
+      } else if (MATH_ENVS.test(env!)) {
+        const inner = src.slice(src.indexOf("}") + 1, src.lastIndexOf("\\end"));
+        const h = mathHtml(mathSrc(env!, inner), true);
+        w = h ? new Html(h, "ltx-eq", true) : chip(`[${env!.replace("*", "")}]`);
+      } else if (TABLE_ENVS.test(env!)) {
+        const h = cached(`T${src}`, () => tableHtml(src));
+        w = h ? new Html(h, "ltx-table", true) : chip(chipLabel(env!, src));
+      } else w = chip(chipLabel(env!, src));
+      block(ln.from, to, w);
       n = e;
       continue;
     }
@@ -76,10 +114,10 @@ function build(state: EditorState): DecorationSet {
     const ranges: Range<Decoration>[] = [], hidden: [number, number][] = [];
     let widgets = 0;
     const cut = (s: number, e: number) => { hidden.push([s, e]); ranges.push(hide.range(s, e)); };
-    const widget = (s: number, e: number, w: Txt) => { widgets++; ranges.push(Decoration.replace({ widget: w }).range(s, e)); };
-    const eat = (p: number, args: number) => { // position after optional [..] and `args` {..} groups
+    const widget = (s: number, e: number, w: WidgetType) => { widgets++; ranges.push(Decoration.replace({ widget: w }).range(s, e)); };
+    const eat = (p: number, args: number, optional = true) => { // position after optional [..] and `args` {..} groups
       const rest = () => text.slice(p, ln.to);
-      const o = /^\s*\[[^\]]*\]/.exec(rest());
+      const o = optional && /^\s*\[[^\]]*\]/.exec(rest());
       if (o) p += o[0].length;
       for (let i = 0; i < args; i++) {
         const g = /^\s*\{/.exec(rest());
@@ -97,9 +135,13 @@ function build(state: EditorState): DecorationSet {
       const s = ln.from + m.index, tk = m[0];
       let e = s + tk.length;
       if (tk[0] === "%") { let b = s; while (b > ln.from && /\s/.test(text[b - 1])) b--; cut(b, e); }
-      else if (tk[0] === "$") ranges.push(mark("ltx-math").range(s, e));
+      else if (tk[0] === "$") {
+        const h = mathHtml(tk.slice(1, -1), false);
+        if (h) widget(s, e, new Html(h, "ltx-im", false)); else ranges.push(mark("ltx-math").range(s, e));
+      }
       else if (tk === "{" || tk === "}") cut(s, e);
       else if (tk === "~") widget(s, e, new Txt(" ", ""));
+      else if (tk === "``" || tk === "''" || tk === "--" || tk === "---") widget(s, e, new Txt({ "``": "“", "''": "”", "--": "–", "---": "—" }[tk]!, ""));
       else if (tk.startsWith("\\\\")) cut(s, e);
       else if (/^\\[^A-Za-z@]/.test(tk)) {
         if (tk[1] === " ") widget(s, e, new Txt(" ", ""));
@@ -119,14 +161,26 @@ function build(state: EditorState): DecorationSet {
         } else if (REF.test(name) || CITE.test(name)) {
           e = eat(e, 1);
           widget(s, e, new Txt(REF.test(name) ? "[ref]" : "[cite]", "ltx-ref"));
+        } else if (macros[name] && macros[name].nargs !== 1) {
+          e = eat(e, macros[name].nargs, false);
+          const src = text.slice(s, e), h = cached(`M${src}`, () => inl(src));
+          if (h) widget(s, e, new Html(h, "ltx-mac", false)); else cut(s, e);
         } else if (name in ARGS) {
           e = eat(e, ARGS[name]);
           cut(s, e);
+        } else if (name === "textcolor" && text[e] === "{") {
+          const c = text.slice(e + 1, groupEnd(text, e) - 1);
+          const e2 = eat(e, 1);
+          if (/^[A-Za-z]+$/.test(c) && text[e2] === "{") ranges.push(Decoration.mark({ attributes: { style: `color:${c}` } }).range(e2 + 1, Math.max(e2 + 1, groupEnd(text, e2) - 1)));
+          cut(s, e2);
+          e = e2;
         } else if (name in FMT && text[e] === "{") {
           const close = groupEnd(text, e);
           ranges.push(mark(FMT[name]).range(e + 1, Math.max(e + 1, close - 1)));
           cut(s, e);
         } else {
+          const col = macros[name] && text[e] === "{" ? macroColor(name) : null;
+          if (col && /^[A-Za-z]+$/.test(col)) ranges.push(Decoration.mark({ attributes: { style: `color:${col}` } }).range(e + 1, Math.max(e + 1, groupEnd(text, e) - 1)));
           if (/^[ \t]$/.test(text[e] ?? "")) e++;
           cut(s, e);
         }
@@ -151,9 +205,9 @@ function build(state: EditorState): DecorationSet {
 export const wordView = StateField.define<{ on: boolean; decos: DecorationSet }>({
   create: () => ({ on: false, decos: Decoration.none }),
   update(v, tr) {
-    let on = v.on;
-    for (const e of tr.effects) if (e.is(setWord)) on = e.value;
-    if (on === v.on && !(on && tr.docChanged)) return v;
+    let on = v.on, hit = false;
+    for (const e of tr.effects) if (e.is(setWord)) { on = e.value; hit = true; }
+    if (!hit && !(on && tr.docChanged)) return v;
     return { on, decos: on ? build(tr.state) : Decoration.none };
   },
   provide: (f) => [
@@ -161,3 +215,10 @@ export const wordView = StateField.define<{ on: boolean; decos: DecorationSet }>
     EditorView.atomicRanges.of((view) => view.state.field(f).decos),
   ],
 });
+
+/** Nearest visible position if `pos` sits strictly inside a hidden/replaced range. */
+export function visiblePos(state: EditorState, pos: number): number {
+  let r = pos;
+  state.field(wordView).decos.between(pos, pos, (from, to) => { if (from < pos && pos < to) r = pos - from <= to - pos ? from : to; });
+  return r;
+}

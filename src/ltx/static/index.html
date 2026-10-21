@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ltx</title>
+<link rel="stylesheet" href="/static/katex/katex.min.css">
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
@@ -13,10 +14,13 @@
   <span class="sep"></span>
   <button id="justify" title="Justify text">Justify</button>
   <span class="sep"></span>
+  <button id="pdf-err" hidden>PDF build failed</button>
   <span id="compile-state"></span>
   <button id="rebuild" title="Rebuild the PDF now">Rebuild</button>
   <button id="zoom-out" title="Zoom out">−</button>
   <button id="zoom-in" title="Zoom in">+</button>
+  <label class="sl" title="Text size (view only)">Aa <input id="fs" type="range" min="12" max="24" step="1" value="17"></label>
+  <label class="sl" title="Text width in inches (view only)">&harr; <input id="cw" type="range" min="4" max="10" step="0.25" value="6.5"></label>
   <button id="latex" title="Show or hide the LaTeX markup">LaTeX</button>
   <button id="pdf" title="Show or hide the PDF">PDF</button>
 </header>

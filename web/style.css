@@ -35,3 +35,7 @@ body.no-pdf #pdf-pane, body.no-pdf #split { display: none; }
 .error-row button { font-size: 11px; }
 #banner { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 10; background: #1b1b1b; color: #fff; padding: 4px 12px; border-radius: 12px; }
 #replaced { background: #f6efd9; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+#pdf-err { background: #f7e1df !important; color: #6d1a1a; border-color: #a12a2a !important; }
+#pdf-err[hidden] { display: none; }
+.sl { display: flex; align-items: center; gap: 3px; color: var(--muted); }
+.sl input { width: 70px; }
