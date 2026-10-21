@@ -8,7 +8,7 @@ import { createEditor } from "./editor";
 import { PdfPane } from "./pdf";
 import { renderErrors } from "./errors";
 import { selectionExtension } from "./selection";
-import { showComments } from "./comments";
+import { showComments, showSuggestions } from "./review";
 import { setWord } from "./decorations/index";
 import { setMacros, visiblePos } from "./decorations/wordview";
 
@@ -67,7 +67,7 @@ function addFile(f: WireFile) {
     (n) => banner(`Updated from disk (${f.path}, ${n} place${n === 1 ? "" : "s"})`));
   sync.view = createEditor({
     parent: host, path: f.path, text: f.text,
-    decorations: { path: f.path, getIndex: () => index, onIndex: (cb) => indexListeners.push(cb) },
+    decorations: { path: f.path, getIndex: () => index, onIndex: (cb) => indexListeners.push(cb), send },
     extra: [
       EV.updateListener.of((u) => sync.onUpdate(u)),
       EV.domEventHandlers({ blur: () => { sync.flush(); } }),
@@ -123,6 +123,7 @@ function onMessage(m: ServerMsg) {
       if (m.index) { index = m.index; indexListeners.forEach((cb) => cb(m.index!)); }
       if (m.compile) onCompile(m.compile);
       showComments(m.comments);
+      showSuggestions(m.suggestions ?? []);
       break;
     case "saved": syncs.get(m.path)?.onSaved(m.hash); break;
     case "save_conflict": syncs.get(m.path)?.onConflict(m.disk_text, m.disk_hash); break;
@@ -132,6 +133,7 @@ function onMessage(m: ServerMsg) {
     case "compile": onCompile(m); break;
     case "index": index = m; indexListeners.forEach((cb) => cb(m)); break;
     case "comments": showComments(m.comments); break;
+    case "suggestions": showSuggestions(m.suggestions); break;
     case "error": banner(`Problem: ${m.msg}`); break;
   }
 }

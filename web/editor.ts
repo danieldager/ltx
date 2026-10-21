@@ -3,6 +3,7 @@ import { EditorState, Extension } from "@codemirror/state";
 import { EditorView, drawSelection, highlightActiveLine, keymap } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
+import { quotes } from "./quotes";
 import { decorationExtensions, DecorationContext } from "./decorations/index";
 
 export interface EditorOpts {
@@ -26,6 +27,7 @@ export function createEditor(o: EditorOpts): EditorView {
         highlightSelectionMatches(),
         EditorView.lineWrapping,
         keymap.of([...searchKeymap, ...historyKeymap, ...defaultKeymap, indentWithTab]),
+        quotes,
         decorationExtensions(o.decorations),
         ...(o.extra ?? []),
       ],

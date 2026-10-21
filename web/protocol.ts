@@ -26,6 +26,13 @@ export interface Comment {
   author: string; created_at: string; updated_at: string;
 }
 
+export interface Suggestion {
+  id: string; file: string; new: string; old: string;
+  anchor: { prefix: string; suffix: string; line: number };
+  note: string; source: string; status: "open" | "accepted" | "rejected" | "discuss";
+  user_comment: string | null; reply: string | null; created_at: string; updated_at: string;
+}
+
 export interface Selection {
   file: string; from: number; to: number; line_from: number; line_to: number;
   text: string; paragraph_text: string;
@@ -34,7 +41,7 @@ export interface Selection {
 
 export type ServerMsg =
   | { type: "hello"; version: 1; root: string; files: WireFile[]; compile: CompileMsg | null;
-      index: IndexMsg | null; comments: Comment[] }
+      index: IndexMsg | null; comments: Comment[]; suggestions?: Suggestion[] }
   | { type: "saved"; path: string; hash: string }
   | { type: "save_conflict"; path: string; disk_text: string; disk_hash: string }
   | { type: "external"; path: string; base_hash: string; new_hash: string; changes: Change[] }
@@ -43,6 +50,7 @@ export type ServerMsg =
   | CompileMsg
   | IndexMsg
   | { type: "comments"; comments: Comment[] }
+  | { type: "suggestions"; suggestions: Suggestion[] }
   | { type: "error"; msg: string };
 
 export type ClientMsg =
@@ -52,4 +60,5 @@ export type ClientMsg =
   | ({ type: "selection" } & Selection)
   | { type: "comment_add"; comment: Partial<Comment> }
   | { type: "comment_update"; id: string; fields: Partial<Comment> }
-  | { type: "comment_delete"; id: string };
+  | { type: "comment_delete"; id: string }
+  | { type: "suggestion_update"; id: string; fields: Partial<Suggestion> };

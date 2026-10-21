@@ -3,6 +3,7 @@
 // skips them. Clicking a rendered widget reveals its source (main.ts handles "ltx-reveal").
 import { EditorState, Range, StateEffect, StateField } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, WidgetType } from "@codemirror/view";
+import { reviewChanged, reviewField } from "../review";
 import { ARGS, CITE, FMT, REF, cached, esc, groupEnd, inl, macroColor, macros, mathHtml, tableHtml } from "./render";
 
 export { setMacros } from "./render";
@@ -63,7 +64,10 @@ function build(state: EditorState): DecorationSet {
   let pend: [number, number] | null = null; // consecutive fully hidden lines
   const flush = () => { if (pend) out.push(Decoration.replace({ block: true }).range(doc.line(pend[0]).from, doc.line(pend[1]).to)); pend = null; };
   const hideLine = (n: number) => { if (pend && pend[1] === n - 1) pend[1] = n; else { flush(); pend = [n, n]; } };
-  const block = (from: number, to: number, w: Html) => { flush(); out.push(Decoration.replace({ widget: w, block: true }).range(from, to)); };
+  const rv = state.field(reviewField, false)?.located ?? [];
+  const block = (from: number, to: number, w: Html) => {
+    if (rv.some((r) => r.to >= from && r.from <= to)) w = new Html(w.html, w.cls + " ltx-tint", true); // suggestion/comment inside: tint the widget
+    flush(); out.push(Decoration.replace({ widget: w, block: true }).range(from, to)); };
   const chip = (label: string) => new Html(esc(label), "ltx-chip", true);
 
   const bd = text.search(/\\begin\{document\}/);
@@ -207,7 +211,7 @@ export const wordView = StateField.define<{ on: boolean; decos: DecorationSet }>
   update(v, tr) {
     let on = v.on, hit = false;
     for (const e of tr.effects) if (e.is(setWord)) { on = e.value; hit = true; }
-    if (!hit && !(on && tr.docChanged)) return v;
+    if (!hit && !(on && (tr.docChanged || reviewChanged(tr)))) return v;
     return { on, decos: on ? build(tr.state) : Decoration.none };
   },
   provide: (f) => [

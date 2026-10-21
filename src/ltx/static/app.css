@@ -115,3 +115,20 @@ body.justify .sheet .ltx-prose, body.justify .sheet .ltx-abstract { text-align: 
 .ltx-tbl.has-head tr:has(+ tr td) th { border-bottom: 1px solid #222; }
 .ltx-tnotes { display: table-caption; caption-side: bottom; text-align: left; font-size: .78em; color: #555; margin-top: .3em; }
 .ltx-chip, .ltx-table, .ltx-eq, .ltx-im, .ltx-mac { cursor: pointer; }
+
+/* review layer */
+.ltx-sug { color: #0f766e; background: rgba(20, 150, 140, .12); border-radius: 2px; }
+.ltx-sug-discuss { border-bottom: 1.5px dotted #0f766e; }
+.ltx-del { color: #c0392b; font-size: .8em; cursor: default; padding: 0 1px; }
+.ltx-cmt { background: rgba(250, 204, 21, .28); }
+.ltx-tint { background: rgba(20, 150, 140, .14) !important; outline: 1px solid rgba(15, 118, 110, .35); }
+.ltx-pop { position: fixed; z-index: 50; background: #fff; border: 1px solid #cfcbc2; border-radius: 5px; box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  padding: 4px 6px; font: 12px/1.35 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; max-width: 340px; }
+.ltx-pop-row { display: flex; gap: 6px; align-items: center; }
+.ltx-pop button { font: inherit; font-weight: 700; border: 1px solid #cfcbc2; background: #fff; border-radius: 4px; width: 24px; height: 22px; cursor: pointer; line-height: 1; }
+.ltx-pop .ltx-ok { color: #1a7f37; } .ltx-pop .ltx-no { color: #c0392b; } .ltx-pop .ltx-plus { color: #000; }
+.ltx-pop-note { color: #77736b; font-size: 11px; margin-top: 3px; }
+.ltx-pop-text { flex: 1; color: #222; }
+.ltx-pop-in { font: inherit; width: 280px; border: 1px solid #cfcbc2; border-radius: 4px; padding: 2px 6px; }
+.ltx-selplus { position: fixed; z-index: 40; width: 20px; height: 20px; border-radius: 50%; background: #000; color: #fff; border: 0; cursor: pointer;
+  font: 700 14px/18px sans-serif; padding: 0; }

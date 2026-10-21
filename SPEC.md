@@ -545,7 +545,7 @@ Server → client:
 
 | type | fields | when |
 |---|---|---|
-| `hello` | `version: 1, root, files: [{path, text, hash}], compile, index, comments` | on connect |
+| `hello` | `version: 1, root, files: [{path, text, hash}], compile, index, comments, suggestions` | on connect |
 | `saved` | `path, hash` | save written; `hash` is the new base |
 | `save_conflict` | `path, disk_text, disk_hash` | save's `base_hash` was stale; the matching `external` was always sent first, so the client merges it and re-sends |
 | `external` | `path, base_hash, new_hash, changes` | file changed on disk (Claude, git, another tab) |
@@ -554,6 +554,7 @@ Server → client:
 | `compile` | `state: running\|ok\|error, rev, pdf_url, errors, duration_ms` | build status; `pdf_url` = `/pdf?rev=<rev>`, always the last good PDF |
 | `index` | `labels: {key: "3.2"}, cites: {key: "Smith et al. (2020)"}, macros: {name: {nargs, body}}` | after each good build |
 | `comments` | `comments: [comment]` | after any change to `comments.json` |
+| `suggestions` | `suggestions: [suggestion]` | after any change to `suggestions.json` (additive, round 3) |
 | `error` | `msg` | protocol error |
 
 Error objects: `{file, line, msg, plain, severity: "error"|"warning"}` (`file`/`line` may be
@@ -561,7 +562,7 @@ null; `plain` is the sentence shown to Daniel).
 
 Client → server: `save {path, base_hash, text_hash, changes}`, `resync {path}`,
 `compile_now {}`, `selection {<selection.json fields>}`, `comment_add {comment}`,
-`comment_update {id, fields}`, `comment_delete {id}`.
+`comment_update {id, fields}`, `comment_delete {id}`, `suggestion_update {id, fields}`.
 
 Ordering: one file's events are handled in order. If the disk changed under a save the
 server sends `external` (to all clients) before `save_conflict`. After a successful save,
@@ -579,6 +580,12 @@ server sends `external` (to all clients) before `save_conflict`. After a success
 - `comments.json` (server and Claude both write it; server watches it):
   `{version, comments: [{id, file, anchor: {quote, prefix, suffix, line}, instruction,
   status: "open"|"done"|"wontdo", reply, author, created_at, updated_at}]}`.
+- `suggestions.json` (Claude writes it, server watches it, Daniel's client updates `status`,
+  `user_comment` through `suggestion_update`): `{version: 1, suggestions: [{id: "s-xxxxxxxx", file,
+  new, old, anchor: {prefix, suffix, line}, note, source: "note"|"comment:<id>",
+  status: "open"|"accepted"|"rejected"|"discuss", user_comment, reply, created_at, updated_at}]}`.
+  `new` is the text now in the file (may be "" for a deletion), `old` the text it replaced;
+  `prefix`/`suffix` are ~40 chars around `new`. Only open/discuss ones are shown.
 - `build/`: tectonic output. On success the PDF is copied to `<docroot>/<stem>.pdf`.
 - `server.log`: the detached server's output.
 

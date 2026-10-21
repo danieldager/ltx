@@ -4,6 +4,8 @@ import type { IndexMsg } from "../protocol";
 import { muteMarkup } from "./highlight";
 import { paperStructure } from "./paper";
 import { wordView } from "./wordview";
+import { reviewExtension } from "../review";
+import type { ClientMsg } from "../protocol";
 
 export { setWord } from "./wordview";
 
@@ -11,8 +13,9 @@ export interface DecorationContext {
   path: string;
   getIndex(): IndexMsg | null;
   onIndex(cb: (i: IndexMsg) => void): void;
+  send(m: ClientMsg): void;
 }
 
-export function decorationExtensions(_ctx: DecorationContext): Extension[] {
-  return [paperStructure, muteMarkup, wordView];
+export function decorationExtensions(ctx: DecorationContext): Extension[] {
+  return [reviewExtension(ctx.path, (m) => ctx.send(m)), paperStructure, muteMarkup, wordView];
 }

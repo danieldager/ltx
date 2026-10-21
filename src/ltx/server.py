@@ -70,6 +70,7 @@ class Session:
         self.clients: set[Client] = set()
         self.compiler = Compiler(self.docroot, self.root_tex, self.broadcast)
         self.comments_hash = text_hash(json.dumps(sidecar.load_comments(self.ltxed)))
+        self.suggestions_hash = text_hash(json.dumps(sidecar.load_suggestions(self.ltxed)))
         self._watch_task: asyncio.Task | None = None
         self._stop = asyncio.Event()
 
@@ -106,7 +107,8 @@ class Session:
         index = {"type": "index", **self.compiler.index} if self.compiler.index else None
         return {"type": "hello", "version": 1, "root": self.root_tex,
                 "files": [f.wire() for f in self.files.values()], "compile": compile_msg,
-                "index": index, "comments": sidecar.load_comments(self.ltxed)}
+                "index": index, "comments": sidecar.load_comments(self.ltxed),
+                "suggestions": sidecar.load_suggestions(self.ltxed)}
 
     async def handle(self, client: Client, msg: dict) -> None:
         t = msg.get("type")
@@ -123,6 +125,10 @@ class Session:
             comments = sidecar.apply_comment_msg(self.ltxed, msg)
             self.comments_hash = text_hash(json.dumps(comments))
             await self.broadcast({"type": "comments", "comments": comments})
+        elif t == "suggestion_update":
+            items = sidecar.apply_suggestion_msg(self.ltxed, msg)
+            self.suggestions_hash = text_hash(json.dumps(items))
+            await self.broadcast({"type": "suggestions", "suggestions": items})
         else:
             await client.send({"type": "error", "msg": f"unknown message type {t!r}"})
 
@@ -184,6 +190,9 @@ class Session:
                 if rel == ".ltxed/comments.json":
                     await self._comments_changed()
                     continue
+                if rel == ".ltxed/suggestions.json":
+                    await self._suggestions_changed()
+                    continue
                 if rel.startswith(".ltxed/") or path.resolve() == pdf or "/." in "/" + rel:
                     continue
                 f = self.files.get(rel)
@@ -207,6 +216,13 @@ class Session:
         if h != self.comments_hash:
             self.comments_hash = h
             await self.broadcast({"type": "comments", "comments": comments})
+
+    async def _suggestions_changed(self) -> None:
+        items = sidecar.load_suggestions(self.ltxed)
+        h = text_hash(json.dumps(items))
+        if h != self.suggestions_hash:
+            self.suggestions_hash = h
+            await self.broadcast({"type": "suggestions", "suggestions": items})
 
 
 def make_app(session: Session) -> Starlette:

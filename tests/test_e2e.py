@@ -403,3 +403,119 @@ def test_column_width_slider_in_screen_percent(browser, copy_doc, serve):
         assert page.evaluate("() => { const e = document.querySelector('.sheet:not([hidden]) .cm-scroller'); return e.scrollWidth > e.clientWidth; }")
         page.set_viewport_size({"width": 1400, "height": 900})
     assert doc(page) == before
+
+def sugg(doc_text, new, old="OLD WORDS", sid="s-test0001", status="open", note="because"):
+    i = doc_text.index(new)
+    return {"id": sid, "file": "main.tex", "new": new, "old": old,
+            "anchor": {"prefix": doc_text[max(0, i - 40):i], "suffix": doc_text[i + len(new):i + len(new) + 40],
+                       "line": doc_text[:i].count("\n") + 1},
+            "note": note, "source": "note", "status": status, "user_comment": None, "reply": None,
+            "created_at": "2026-10-21T10:00:00Z", "updated_at": "2026-10-21T10:00:00Z"}
+
+
+def write_sidecar(root, name, key, items):
+    p = root / ".ltxed" / name
+    tmp = p.with_suffix(".ltxtmp")
+    tmp.write_text(json.dumps({"version": 1, key: items}))
+    tmp.replace(p)
+
+
+def read_sidecar(root, name, key):
+    return json.loads((root / ".ltxed" / name).read_text())[key]
+
+
+def review_setup(browser, copy_doc, serve):
+    root = copy_doc("methodology")
+    s = serve(root / "main.tex")
+    page = open_page(browser, s)
+    text = doc(page)
+    body = text.index("\\begin{document}")
+    m = re.search(r"\n\n([A-Z][a-z]+ [a-z]+ [a-z]+ [a-z]+)", text[body:])
+    new = m.group(1)
+    write_sidecar(root, "suggestions.json", "suggestions", [sugg(text, new)])  # outside write, appears live
+    i = text.index(new)
+    page.evaluate("""(i) => { const v = window.__ltx.view(); v.dispatch({effects: v.constructor.scrollIntoView(i, {y: 'center'})}); }""", i)
+    page.wait_for_selector(".sheet:not([hidden]) .ltx-sug", state="attached", timeout=15000)
+    return root, page, text, new, i
+
+
+def test_suggestion_accept(browser, copy_doc, serve):
+    root, page, text, new, i = review_setup(browser, copy_doc, serve)
+    page.hover(".sheet:not([hidden]) .ltx-sug")
+    page.wait_for_selector(".ltx-pop .ltx-ok")
+    assert "because" in page.locator(".ltx-pop").inner_text()
+    page.click(".ltx-pop .ltx-ok")
+    wait_for(lambda: read_sidecar(root, "suggestions.json", "suggestions")[0]["status"] == "accepted", what="accepted")
+    page.wait_for_function("() => !document.querySelector('.sheet:not([hidden]) .ltx-sug')")
+    assert doc(page) == text
+
+
+def test_suggestion_reject_restores_old_text_exactly(browser, copy_doc, serve):
+    root, page, text, new, i = review_setup(browser, copy_doc, serve)
+    page.hover(".sheet:not([hidden]) .ltx-sug")
+    page.click(".ltx-pop .ltx-no")
+    wait_for(lambda: read_sidecar(root, "suggestions.json", "suggestions")[0]["status"] == "rejected", what="rejected")
+    assert doc(page) == text[:i] + "OLD WORDS" + text[i + len(new):]
+    page.evaluate("() => window.__ltx.view().focus()")
+    page.keyboard.press("Meta+z")  # a normal undoable edit
+    assert doc(page) == text
+
+
+def test_suggestion_discuss(browser, copy_doc, serve):
+    root, page, text, new, i = review_setup(browser, copy_doc, serve)
+    page.hover(".sheet:not([hidden]) .ltx-sug")
+    page.click(".ltx-pop .ltx-plus")
+    page.keyboard.type("why this wording?")
+    page.keyboard.press("Enter")
+    wait_for(lambda: read_sidecar(root, "suggestions.json", "suggestions")[0]["status"] == "discuss", what="discuss")
+    assert read_sidecar(root, "suggestions.json", "suggestions")[0]["user_comment"] == "why this wording?"
+    page.wait_for_selector(".sheet:not([hidden]) .ltx-sug-discuss", state="attached")
+    assert doc(page) == text
+
+
+def test_selection_comment_written_to_comments_json(browser, copy_doc, serve):
+    root = copy_doc("methodology")
+    s = serve(root / "main.tex")
+    page = open_page(browser, s)
+    text = doc(page)
+    i = text.index("This section describes")
+    page.evaluate("""(i) => { const v = window.__ltx.view(); v.dispatch({effects: v.constructor.scrollIntoView(i, {y: 'center'})}); }""", i)
+    place(page, i, i + 22)
+    page.wait_for_selector(".ltx-selplus")
+    page.click(".ltx-selplus")
+    page.keyboard.type("tighten this")
+    page.keyboard.press("Enter")
+    wait_for(lambda: (root / ".ltxed/comments.json").exists(), what="comments.json")
+    c = read_sidecar(root, "comments.json", "comments")[0]
+    assert c["instruction"] == "tighten this" and c["anchor"]["quote"] == "This section describes"
+    assert c["status"] == "open" and c["author"] == "daniel" and c["file"] == "main.tex"
+    page.wait_for_selector(".sheet:not([hidden]) .ltx-cmt", state="attached")
+    assert doc(page) == text
+
+
+def test_typed_quote_becomes_latex_quotes(browser, copy_doc, serve):
+    root = copy_doc("methodology")
+    s = serve(root / "main.tex")
+    page = open_page(browser, s)
+    text = doc(page)
+    i = text.index("This section describes")
+    page.evaluate("(i) => { const v = window.__ltx.view(); v.dispatch({effects: v.constructor.scrollIntoView(i, {y: 'center'})}); }", i)
+    place(page, i)
+    page.keyboard.type('say "hello" ok')
+    assert doc(page) == text[:i] + "say ``hello'' ok" + text[i:]
+    page.click("#latex")  # OFF mode renders them curly at once
+    place(page, i)
+    page.keyboard.type('"')
+    assert doc(page).startswith(text[:i] + "``say")
+    page.keyboard.press("Meta+z")
+    assert doc(page).startswith(text[:i] + '"say')
+    page.click("#latex")
+    # wrap a selection
+    place(page, i + 1, i + 1 + 3)
+    page.keyboard.type('"')
+    assert "``" + doc(page)[i + 3:i + 6] + "''" in doc(page)[i:i + 20]
+    # no conversion inside a comment
+    k = text.index("\n% The text below") + 1
+    place(page, k + 2)
+    page.keyboard.type('"')
+    assert doc(page)[k + 2] == '"'

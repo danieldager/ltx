@@ -77,3 +77,23 @@ def apply_comment_msg(ltxed: Path, msg: dict) -> list[dict]:
         comments = [c for c in comments if c["id"] != msg["id"]]
     save_comments(ltxed, comments)
     return comments
+
+
+# --- suggestions (Claude writes them, Daniel reviews) -------------------------------------
+
+def load_suggestions(ltxed: Path) -> list[dict]:
+    return read_json(ltxed / "suggestions.json", {"suggestions": []}).get("suggestions", [])
+
+
+def save_suggestions(ltxed: Path, items: list[dict]) -> None:
+    write_json(ltxed / "suggestions.json", {"version": 1, "suggestions": items})
+
+
+def apply_suggestion_msg(ltxed: Path, msg: dict) -> list[dict]:
+    items = load_suggestions(ltxed)
+    for s in items:
+        if s["id"] == msg["id"]:
+            s.update(msg["fields"])
+            s["updated_at"] = now_iso()
+    save_suggestions(ltxed, items)
+    return items
