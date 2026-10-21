@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ltx</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header id="bar">
+  <nav id="tabs"></nav>
+  <span id="save-state">Saved</span>
+  <span class="sep"></span>
+  <button id="justify" title="Justify text">Justify</button>
+  <span class="sep"></span>
+  <span id="compile-state"></span>
+  <button id="rebuild" title="Rebuild the PDF now">Rebuild</button>
+  <button id="zoom-out" title="Zoom out">−</button>
+  <button id="zoom-in" title="Zoom in">+</button>
+  <button id="latex" title="Show or hide the LaTeX markup">LaTeX</button>
+  <button id="pdf" title="Show or hide the PDF">PDF</button>
+</header>
+<div id="conn" hidden>Disconnected from the ltx server, retrying…</div>
+<main>
+  <section id="editor-pane">
+    <div id="banner" hidden></div>
+    <div id="replaced" hidden></div>
+    <div id="sheets"></div>
+  </section>
+  <div id="split"></div>
+  <section id="pdf-pane">
+    <div id="errors" hidden></div>
+    <div id="pdf-scroll"></div>
+  </section>
+</main>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

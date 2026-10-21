@@ -1,0 +1,91 @@
+\documentclass[12pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[letterpaper,margin=1in]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[authoryear,round]{natbib}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue!50!black]{hyperref}
+
+% placeholder for text still to be confirmed; prints red
+\newcommand{\toconfirm}[1]{\textcolor{red}{[TO CONFIRM: #1]}}
+
+\title{Title of the Paper\thanks{We thank ... for comments. All errors are our own.}}
+\author{First Author\thanks{Affiliation. Email: first@example.edu}
+  \and Second Author\thanks{Affiliation. Email: second@example.edu}}
+\date{\today}
+
+\begin{document}
+
+\pagenumbering{roman}
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+\noindent One paragraph of about 100 to 150 words: the question, what we do, what we find, and why it matters.
+
+\medskip
+\noindent\textbf{JEL codes:} C10, D83, L82.\\
+\noindent\textbf{Keywords:} transport, commute, methodology.
+\end{abstract}
+\clearpage
+\pagenumbering{arabic}
+
+\section{Introduction}\label{sec:intro}
+
+The opening paragraph states the question and the answer. Related work follows \citet{author2020}.
+
+\section{Methodology}\label{sec:method}
+
+\subsection{Data}\label{sec:data}
+
+Describe the sample, its source and the period it covers.
+
+\subsection{Design}\label{sec:design}
+
+Describe the design. The main specification is
+\begin{equation}\label{eq:main}
+  y_{i} = \alpha + \beta\, x_{i} + \varepsilon_{i},
+\end{equation}
+where $y_i$ is the outcome for unit $i$ and $\beta$ is the parameter of interest.
+
+\subsection{Estimation}\label{sec:estimation}
+
+Explain how equation~\eqref{eq:main} is estimated and how standard errors are computed.
+
+\section{Results}\label{sec:results}
+
+Table~\ref{tab:main} reports the main estimates.
+
+\begin{table}[htbp]
+\centering
+\caption{Main estimates}\label{tab:main}
+\begin{tabular}{lcc}
+\toprule
+ & (1) & (2) \\
+\midrule
+$\beta$ & 0.00 & 0.00 \\
+ & (0.00) & (0.00) \\
+\midrule
+Observations & 0 & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Conclusion}\label{sec:conclusion}
+
+Summarise the findings and their limits.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\appendix
+\section{Additional material}\label{app:extra}
+
+Supplementary tables and details.
+
+\end{document}

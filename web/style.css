@@ -1,0 +1,37 @@
+/* App chrome (shared). The paper look lives in paper.css (phase 2). */
+:root { --pdf-w: 42vw; --desk: #e6e3dc; --ink: #1b1b1b; --muted: #8a8780; --line: #cfcbc2; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { display: flex; flex-direction: column; background: var(--desk); color: var(--ink);
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+#bar { display: flex; align-items: center; gap: 6px; padding: 5px 10px; background: #f4f2ed; border-bottom: 1px solid var(--line); }
+#bar button { font: inherit; border: 1px solid var(--line); background: #fff; border-radius: 4px; padding: 2px 8px; cursor: pointer; }
+#bar button.on { background: #1b1b1b; color: #fff; border-color: #1b1b1b; }
+#bar > * { flex: none; white-space: nowrap; }
+#bar { overflow: hidden; }
+#tabs { display: flex; gap: 4px; flex: 0 1 auto !important; min-width: 0; overflow-x: auto; }
+#tabs button.on { background: #1b1b1b; color: #fff; }
+#save-state { color: var(--muted); margin-left: 8px; min-width: 60px; }
+.sep { flex: 1; }
+.compile-running { color: var(--muted); } .compile-ok { color: #3d6b3d; } .compile-error { color: #a12a2a; }
+#conn { background: #a12a2a; color: #fff; padding: 4px 10px; }
+main { flex: 1; display: flex; min-height: 0; }
+#editor-pane { flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; }
+#sheets { flex: 1; min-height: 0; overflow: hidden; }
+#sheets .sheet { height: 100%; }
+#sheets .sheet .cm-editor { height: 100%; }
+#split { width: 6px; cursor: col-resize; background: var(--line); }
+#pdf-pane { width: var(--pdf-w); display: flex; flex-direction: column; min-width: 0; background: #b9b5ad; }
+body.no-pdf #pdf-pane, body.no-pdf #split { display: none; }
+#pdf-scroll { flex: 1; overflow: auto; }
+.pdf-pages { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 12px; }
+.pdf-page { background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.25); flex: none; }
+.pdf-page canvas { width: 100%; height: 100%; display: block; }
+.errors { padding: 8px 10px; font-size: 13px; border-bottom: 1px solid var(--line); max-height: 40%; overflow: auto; }
+.errors.bad { background: #f7e1df; color: #6d1a1a; }
+.errors.warn { background: #f6efd9; color: #5d4a12; }
+.errors-head { font-weight: 600; margin-bottom: 4px; }
+.error-row { margin: 3px 0; }
+.error-row button { font-size: 11px; }
+#banner { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 10; background: #1b1b1b; color: #fff; padding: 4px 12px; border-radius: 12px; }
+#replaced { background: #f6efd9; padding: 6px 10px; border-bottom: 1px solid var(--line); }
