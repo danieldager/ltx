@@ -568,3 +568,32 @@ def test_mouse_drag_selection_comment_quotes_whole_selection(browser, copy_doc, 
     wait_for(lambda: (root / ".ltxed/comments.json").exists(), what="comments.json")
     c = read_sidecar(root, "comments.json", "comments")[0]
     assert c["anchor"]["quote"] == text[sel[0]:sel[1]] and len(c["anchor"]["quote"]) > 20
+
+
+def test_export_copies_flattened_live_buffer(browser, copy_doc, serve):
+    root = copy_doc("tool")
+    s = serve(root / "main.tex")
+    ctx = browser.new_context(viewport={"width": 1400, "height": 900}, permissions=["clipboard-read", "clipboard-write"])
+    page = ctx.new_page()
+    page.goto(s.url)
+    page.wait_for_function("() => window.__ltx && window.__ltx.syncs.size > 0")
+    page.evaluate("""() => { const v = window.__ltx.view('main.tex');
+        v.dispatch({changes: {from: 0, insert: '% UNSAVED-MARKER\\n'}}); }""")
+    page.click("#export")
+    page.wait_for_function("() => document.getElementById('export').textContent.startsWith('Copied')")
+    clip = page.evaluate("() => navigator.clipboard.readText()")
+    assert clip.startswith("% UNSAVED-MARKER")
+    assert not re.search(r"^[^%\n]*\\input\{appendix_prompts", clip, re.M)
+    n = len(clip.split("\n"))
+    assert page.inner_text("#export") == f"Copied {n} lines"
+    ctx.close()
+
+
+def test_appendix_numbering_carries_into_input_file(browser, copy_doc, serve):
+    root = copy_doc("tool")
+    s = serve(root / "main.tex")
+    page = open_page(browser, s, pdf=False)
+    page.click("#tabs button[data-path='appendix_prompts.tex']")
+    page.wait_for_selector(".sheet:not([hidden]) .ltx-secnum")
+    first = lambda: page.locator(".sheet:not([hidden]) .ltx-secnum").first.inner_text()
+    wait_for(lambda: re.fullmatch(r"[A-Z]\.\d+", first()), what="appendix letter numbering")

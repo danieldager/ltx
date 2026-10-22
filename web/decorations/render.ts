@@ -12,6 +12,9 @@ export function cached(key: string, fn: () => string | null): string | null {
 
 export const FMT: Record<string, string> = { emph: "ltx-w-it", textit: "ltx-w-it", textsl: "ltx-w-it", textbf: "ltx-w-b", textsc: "ltx-w-sc",
   underline: "ltx-w-u", texttt: "ltx-w-tt", paragraph: "ltx-w-b", subparagraph: "ltx-w-b" };
+/** \label -> number text from the compiled .aux (set by main.ts); lets \ref show "A.1" like the PDF. */
+export let labels: Record<string, string> = {};
+export function setLabels(l: Record<string, string>) { labels = l; }
 export const REF = /^(ref|eqref|autoref|cref|Cref|pageref|vref)$/;
 export const CITE = /^(cite|citep|citet|citealp|citeauthor|citeyear|parencite|textcite|nocite)$/;
 // hidden together with N brace arguments

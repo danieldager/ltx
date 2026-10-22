@@ -1,7 +1,8 @@
 // Phase 1 paper structure over the visible source: front page (title/author/date/abstract,
 // JEL + keywords), numbered headings (1, 1.1, 1.1.1; A, A.1 after \appendix), footnote
 // markers, muted preamble, block environments, first-line paragraph indents.
-import { Range } from "@codemirror/state";
+import { Range, StateEffect } from "@codemirror/state";
+import { NumState, advance, numberOf } from "../numbering";
 import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
 
 class Marker extends WidgetType {
@@ -14,6 +15,10 @@ const BLOCK_ENVS = /^(table\*?|figure\*?|longtable|tabular\*?|tabularx|threepart
 const HEAD = /^\s*\\(section|subsection|subsubsection|paragraph)(\*?)\s*\{/;
 const LEVEL: Record<string, number> = { section: 1, subsection: 2, subsubsection: 3, paragraph: 4 };
 const THANKS = ["*", "†", "‡", "§", "¶"];
+/** Set by main.ts: numbering state at the start of the view's file (may sit after \\appendix in the root). */
+let startOf: (v: EditorView) => NumState | null = () => null;
+export const renumber = StateEffect.define<null>();
+export function setStartProvider(f: (v: EditorView) => NumState | null) { startOf = f; }
 const line = (cls: string) => Decoration.line({ class: cls });
 
 /** End offset (exclusive, after the closing brace) of the {group} starting at `open`. */
@@ -47,15 +52,17 @@ function build(view: EditorView): DecorationSet {
 
   const beginDoc = docText.search(/\\begin\{document\}/);
   const preambleEnd = beginDoc < 0 ? 0 : state.doc.lineAt(beginDoc).number;
-  const counters = [0, 0, 0];
-  let appendix = false, inAbstract = false, blockDepth = 0, footnote = 0;
+  const st0 = startOf(view);
+  const st: NumState = { counters: [...(st0?.counters ?? [0, 0, 0])], appendix: st0?.appendix ?? false };
+  let inAbstract = false, blockDepth = 0, footnote = 0;
   let prevKind = "blank", lastNonBlank = "head";
 
   for (let n = 1; n <= state.doc.lines; n++) {
     const ln = state.doc.line(n), t = ln.text;
     if (lineCls.has(n)) { decos.push(line(lineCls.get(n)!).range(ln.from)); prevKind = "front"; continue; }
     if (n <= preambleEnd) { decos.push(line("ltx-preamble").range(ln.from)); continue; }
-    if (/\\appendix\b/.test(t)) appendix = true;
+    const cut = /(?<!\\)%/.exec(t);
+    advance(st, cut ? t.slice(0, cut.index) : t);
     if (/\\begin\{abstract\}/.test(t)) inAbstract = true;
 
     let cls = "", kind = "prose";
@@ -69,10 +76,7 @@ function build(view: EditorView): DecorationSet {
       kind = "head";
       cls = `ltx-h${lvl}`;
       if (!head[2] && lvl <= 3) {
-        counters[lvl - 1]++;
-        for (let i = lvl; i < 3; i++) counters[i] = 0;
-        const top = appendix ? String.fromCharCode(64 + counters[0]) : String(counters[0]);
-        const num = [top, ...counters.slice(1, lvl)].join(".");
+        const num = numberOf(st, lvl);
         decos.push(Decoration.widget({ widget: new Marker(num, "ltx-secnum"), side: -1 }).range(ln.from));
       }
     } else if (!t.trim()) kind = "blank";
@@ -101,5 +105,5 @@ function build(view: EditorView): DecorationSet {
 export const paperStructure = ViewPlugin.fromClass(class {
   decorations: DecorationSet;
   constructor(view: EditorView) { this.decorations = build(view); }
-  update(u: ViewUpdate) { if (u.docChanged) this.decorations = build(u.view); }
+  update(u: ViewUpdate) { if (u.docChanged || u.transactions.some((t) => t.effects.some((e) => e.is(renumber)))) this.decorations = build(u.view); }
 }, { decorations: (v) => v.decorations });

@@ -4,7 +4,7 @@
 import { EditorState, Range, StateEffect, StateField } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, WidgetType } from "@codemirror/view";
 import { reviewChanged, reviewField } from "../review";
-import { ARGS, CITE, FMT, REF, cached, esc, groupEnd, inl, macroColor, macros, mathHtml, tableHtml } from "./render";
+import { ARGS, CITE, FMT, REF, labels, cached, esc, groupEnd, inl, macroColor, macros, mathHtml, tableHtml } from "./render";
 
 export { setMacros } from "./render";
 export const setWord = StateEffect.define<boolean>();
@@ -163,8 +163,11 @@ function build(state: EditorState): DecorationSet {
           widget(s, e, new Txt(l?.enumerate ? `${++l.count}. ` : "• ", "ltx-bullet"));
           if (text[e] === " ") cut(e, ++e);
         } else if (REF.test(name) || CITE.test(name)) {
+          const e0 = e;
           e = eat(e, 1);
-          widget(s, e, new Txt(REF.test(name) ? "[ref]" : "[cite]", "ltx-ref"));
+          const key = text.slice(e0, e).replace(/^\[[^\]]*\]/, "").slice(1, -1).trim();
+          const num = REF.test(name) && /^(ref|eqref)$/.test(name) ? labels[key] : undefined;
+          widget(s, e, new Txt(num ? (name === "eqref" ? `(${num})` : num) : REF.test(name) ? "[ref]" : "[cite]", "ltx-ref"));
         } else if (macros[name] && macros[name].nargs !== 1) {
           e = eat(e, macros[name].nargs, false);
           const src = text.slice(s, e), h = cached(`M${src}`, () => inl(src));

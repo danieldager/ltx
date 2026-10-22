@@ -9,16 +9,27 @@ import { PdfPane } from "./pdf";
 import { renderErrors } from "./errors";
 import { selectionExtension } from "./selection";
 import { showComments, showSuggestions } from "./review";
+import { flatten } from "./flatten";
+import { fileStarts } from "./numbering";
+import { renumber, setStartProvider } from "./decorations/paper";
 import { setWord } from "./decorations/index";
+import { setLabels } from "./decorations/render";
 import { setMacros, visiblePos } from "./decorations/wordview";
 
 const $ = (id: string) => document.getElementById(id)!;
 const syncs = new Map<string, FileSync>();
 const hosts = new Map<string, HTMLElement>();
 let active = "";
+let rootPath = "main.tex";
 let ws: WebSocket;
 let index: IndexMsg | null = null;
-const indexListeners: ((i: IndexMsg) => void)[] = [(i) => { setMacros(i.macros); if (word) syncs.forEach((s) => s.view.dispatch({ effects: setWord.of(true) })); }];
+const indexListeners: ((i: IndexMsg) => void)[] = [(i) => { setMacros(i.macros); setLabels(i.labels); if (word) syncs.forEach((s) => s.view.dispatch({ effects: setWord.of(true) })); }];
+setStartProvider((view) => {
+  const texts: Record<string, string> = {};
+  let path = "";
+  syncs.forEach((s, p) => { texts[p] = s.view?.state.doc.toString() ?? ""; if (s.view === view) path = p; });
+  return fileStarts(rootPath, texts)[path] ?? null;
+});
 const pdf = new PdfPane($("pdf-scroll"));
 let lastCompile: CompileMsg | null = null;
 let word = false; // LaTeX markup hidden
@@ -55,6 +66,22 @@ function banner(text: string) {
   bannerTimer = window.setTimeout(() => (b.hidden = true), 2500);
 }
 
+// section numbers depend on the other files (\appendix, earlier sections): refresh the others after an edit
+let renumberTimer = 0;
+const lastStart = new Map<string, string>();
+function scheduleRenumber(_from?: EditorView) {
+  clearTimeout(renumberTimer);
+  renumberTimer = window.setTimeout(() => {
+    const texts: Record<string, string> = {};
+    syncs.forEach((s, p) => (texts[p] = s.view.state.doc.toString()));
+    const starts = fileStarts(rootPath, texts);
+    syncs.forEach((s, p) => {
+      const sig = JSON.stringify(starts[p] ?? null);
+      if (lastStart.get(p) !== sig) { lastStart.set(p, sig); s.view.dispatch({ effects: renumber.of(null) }); }
+    });
+  }, 150);
+}
+
 function addFile(f: WireFile) {
   const host = document.createElement("div");
   host.className = "sheet";
@@ -69,7 +96,7 @@ function addFile(f: WireFile) {
     parent: host, path: f.path, text: f.text,
     decorations: { path: f.path, getIndex: () => index, onIndex: (cb) => indexListeners.push(cb), send },
     extra: [
-      EV.updateListener.of((u) => sync.onUpdate(u)),
+      EV.updateListener.of((u) => { sync.onUpdate(u); if (u.docChanged) scheduleRenumber(u.view); }),
       EV.domEventHandlers({ blur: () => { sync.flush(); } }),
       keymap.of([{ key: "Mod-s", preventDefault: true, run: () => { sync.flush(); return true; } }]),
       ...selectionExtension(f.path, send),
@@ -77,6 +104,7 @@ function addFile(f: WireFile) {
   });
   if (word) sync.view.dispatch({ effects: setWord.of(true) });
   syncs.set(f.path, sync);
+  scheduleRenumber(sync.view);
   const tab = document.createElement("button");
   tab.textContent = f.path;
   tab.dataset.path = f.path;
@@ -119,6 +147,7 @@ function onMessage(m: ServerMsg) {
         if (!s) addFile(f);
         else s.resume(f.text, f.hash);
       }
+      rootPath = m.root;
       if (!active) activate(m.root);
       if (m.index) { index = m.index; indexListeners.forEach((cb) => cb(m.index!)); }
       if (m.compile) onCompile(m.compile);
@@ -228,6 +257,27 @@ $("sheets").addEventListener("ltx-reveal", (ev) => {
 });
 $("zoom-in").onclick = () => { pdf.zoom *= 1.15; if (lastCompile?.pdf_url) pdf.rezoom(lastCompile.pdf_url); };
 $("zoom-out").onclick = () => { pdf.zoom /= 1.15; if (lastCompile?.pdf_url) pdf.rezoom(lastCompile.pdf_url); };
+// Export: copy the whole document as one LaTeX text, using the live (unsaved) buffers.
+async function copyText(t: string) {
+  try { await navigator.clipboard.writeText(t); return; } catch { /* fall back */ }
+  const ta = document.createElement("textarea");
+  ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.append(ta); ta.select();
+  const ok = document.execCommand("copy");
+  ta.remove();
+  if (!ok) throw new Error("clipboard unavailable");
+}
+let exportTimer = 0;
+$("export").onclick = async () => {
+  const texts: Record<string, string> = {};
+  syncs.forEach((s, p) => (texts[p] = s.view.state.doc.toString()));
+  const out = flatten(rootPath, texts);
+  const btn = $("export"), label = "Export";
+  clearTimeout(exportTimer);
+  try { await copyText(out); btn.textContent = `Copied ${out.split("\n").length} lines`; }
+  catch { btn.textContent = "Copy failed"; }
+  exportTimer = window.setTimeout(() => (btn.textContent = label), 2000);
+};
 $("rebuild").onclick = () => send({ type: "compile_now" });
 $("split").onmousedown = (e) => {
   e.preventDefault();
