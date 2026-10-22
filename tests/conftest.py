@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-draft = Path("/path/to/papers")
+FIXTURES = Path(__file__).parent / "fixtures"  # frozen snapshots; tests never touch real documents
 DOCS = {"tool": ["main.tex", "appendix_prompts.tex"], "short": ["main.tex", "final20_table.tex"]}
 
 
@@ -16,7 +16,7 @@ def copy_doc(tmp_path):
     """Scratch copy of a real doc (the originals are never touched)."""
     def make(name: str) -> Path:
         dst = tmp_path / name
-        shutil.copytree(draft / name, dst, ignore=shutil.ignore_patterns(".ltxed"))
+        shutil.copytree(FIXTURES / name, dst, ignore=shutil.ignore_patterns(".ltxed"))
         return dst
     return make
 
@@ -27,7 +27,7 @@ class Server:
         self.docroot = tex.parent
         self.proc = subprocess.Popen([sys.executable, "-m", "ltx.cli", "serve", str(tex)],
                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        for _ in range(200):
+        for _ in range(1200):  # 60 s: the machine can be heavily loaded
             p = self.docroot / ".ltxed" / "session.json"
             if p.exists():
                 self.url = json.loads(p.read_text())["url"]
@@ -40,7 +40,7 @@ class Server:
 
     def stop(self):
         self.proc.terminate()
-        self.proc.wait(5)
+        self.proc.wait(30)
 
 
 @pytest.fixture

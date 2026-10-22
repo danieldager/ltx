@@ -23,7 +23,17 @@ def browser():
         b.close()
 
 
-def wait_for(fn, timeout=15.0, what="condition"):
+@pytest.fixture(autouse=True)
+def close_pages(request):
+    """Close every page a test opened: idle pages keep rendering PDFs and starve (and unfocus) the next test."""
+    yield
+    if "browser" in request.fixturenames:
+        for c in request.getfixturevalue("browser").contexts:
+            for p in c.pages:
+                p.close()
+
+
+def wait_for(fn, timeout=30.0, what="condition"):
     t0 = time.time()
     while time.time() - t0 < timeout:
         v = fn()
@@ -35,6 +45,7 @@ def wait_for(fn, timeout=15.0, what="condition"):
 
 def open_page(browser, server, pdf=True):
     page = browser.new_page(viewport={"width": 1400, "height": 900})
+    page.bring_to_front()  # an unfocused page reports hasFocus() false, which hides the selection button
     if pdf:  # the PDF pane is hidden by default
         page.add_init_script("localStorage.setItem('ltx.pdf', '1')")
     errors = []
@@ -59,6 +70,16 @@ def place(page, pos, head=None, path="main.tex"):
     # let CM sync the DOM selection (a real click does this natively) before typing
     page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
     page.wait_for_timeout(50)
+
+
+def scrolled_to(page, pos):
+    """Wait until `pos` is on screen and the editor scroller has stopped moving (a late scroll event hides the + button)."""
+    page.wait_for_function("""(i) => new Promise((ok) => {
+        const v = window.__ltx.view(); const sc = v.scrollDOM; let last = -1, n = 0;
+        const tick = () => { const c = v.coordsAtPos(i);
+            n = c && c.top > 0 && c.top < innerHeight && sc.scrollTop === last ? n + 1 : 0; last = sc.scrollTop;
+            n >= 8 ? ok(true) : requestAnimationFrame(tick); };
+        tick(); })""", arg=pos)
 
 
 def saved(page):
@@ -191,7 +212,7 @@ def test_typing_is_local_and_fast(browser, copy_doc, serve):
 @pytest.mark.parametrize("name", ["tool", "short"])
 def test_background_compile_succeeds(browser, copy_doc, serve, name):
     root = copy_doc(name)
-    (root / "main.pdf").unlink()
+    (root / "main.pdf").unlink(missing_ok=True)
     s = serve(root / "main.tex")
     page = open_page(browser, s)
     wait_for(lambda: (root / ".ltxed/compile_errors.json").exists() and s.compile_state()["state"] == "ok",
@@ -480,6 +501,7 @@ def test_selection_comment_written_to_comments_json(browser, copy_doc, serve):
     text = doc(page)
     i = text.index("This section describes")
     page.evaluate("""(i) => { const v = window.__ltx.view(); v.dispatch({effects: v.constructor.scrollIntoView(i, {y: 'center'})}); }""", i)
+    scrolled_to(page, i)
     place(page, i, i + 22)
     page.wait_for_selector(".ltx-selplus")
     page.click(".ltx-selplus")
@@ -546,7 +568,6 @@ def test_rendered_widgets_fit_the_column(browser, copy_doc, serve):
                 assert r["over"] <= 1.5 or r["floor"], (tab, r)
                 scaled += r["scaled"]
     assert scaled > 0
-    page.screenshot(path="/tmp/ltx-shot")
 
 
 def test_mouse_drag_selection_comment_quotes_whole_selection(browser, copy_doc, serve):
@@ -556,7 +577,7 @@ def test_mouse_drag_selection_comment_quotes_whole_selection(browser, copy_doc, 
     text = doc(page)
     i = text.index("This section describes")
     page.evaluate("(i) => { const v = window.__ltx.view(); v.dispatch({effects: v.constructor.scrollIntoView(i, {y: 'center'})}); }", i)
-    page.wait_for_timeout(300)
+    scrolled_to(page, i)
     a, b = page.evaluate("([i, j]) => { const v = window.__ltx.view(); const x = v.coordsAtPos(i), y = v.coordsAtPos(j); return [[x.left + 1, x.top + 5], [y.left, y.top + 5]]; }", [i, i + 40])
     page.mouse.move(*a); page.mouse.down(); page.mouse.move(a[0] + 50, a[1], steps=4); page.mouse.move(*b, steps=6); page.mouse.up()
     sel = page.evaluate("() => { const m = window.__ltx.view().state.selection.main; return [m.from, m.to]; }")

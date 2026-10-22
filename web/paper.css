@@ -10,7 +10,7 @@
   --mono: "LM Mono", Menlo, monospace; --mute: #a39f96; }
 
 .sheet .cm-scroller { font-family: var(--serif); font-size: var(--fs, 17px); line-height: 1.55; padding: 28px 0 90vh; }
-.sheet .cm-content { flex: 0 0 auto; width: var(--col-w, 100%); max-width: 100%; min-width: var(--col-min, 0px); margin: 0 auto; padding: 1in;
+.sheet .cm-content { flex: 0 0 auto !important; /* CM writes an inline flex-basis (a stale narrow one survives a window resize) that would override width */ width: var(--col-w, 100%); max-width: 100%; min-width: var(--col-min, 0px); margin: 0 auto; padding: 1in;
   background: var(--paper); box-shadow: 0 1px 6px rgba(0,0,0,.18); min-height: 11in; caret-color: #000; }
 .sheet .cm-editor.cm-focused { outline: none; }
 .sheet .cm-activeLine { background: rgba(255, 240, 190, .25); }

@@ -10,11 +10,11 @@ import pytest
 from ltx.compile import parse_errors
 from ltx.sync import apply_changes, diff_changes
 
-from conftest import draft
+from conftest import FIXTURES
 
 
 def test_diff_roundtrip_random_edits():
-    base = (draft / "tool" / "main.tex").read_text()
+    base = (FIXTURES / "tool" / "main.tex").read_text()
     rng = random.Random(0)
     for _ in range(30):
         new = base
@@ -27,7 +27,7 @@ def test_diff_roundtrip_random_edits():
 
 
 def test_diff_is_local_inside_long_line():
-    base = (draft / "tool" / "main.tex").read_text()
+    base = (FIXTURES / "tool" / "main.tex").read_text()
     line = max(base.splitlines(), key=len)
     word = line.split()[20]
     new = base.replace(line, line.replace(" " + word + " ", " WORD ", 1), 1)
