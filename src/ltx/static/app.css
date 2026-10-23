@@ -100,7 +100,7 @@ body.justify .sheet .ltx-prose, body.justify .sheet .ltx-abstract { text-align: 
 .ltx-h4 { font-weight: 400; }
 .ltx-h4 .ltx-cmd + .ltx-brace ~ * { font-weight: 700; }
 .ltx-secnum { font-weight: 700; margin-right: .9em; }
-.ltx-fnmark { font-size: .65em; vertical-align: super; line-height: 0; color: #000; margin-right: .3em; }
+.ltx-fnmark { font-size: .65em; vertical-align: super; line-height: 0; color: #000; margin-right: 1px; }
 .ltx-indent { text-indent: 1.5em; }
 .ltx-block { font-family: var(--mono); font-size: 12px; line-height: 1.4; color: #6c685f; background: #f6f3ec; }
 .ltx-block .ltx-cmd, .ltx-block .ltx-key, .ltx-block .ltx-brace { font-size: 1em; }
