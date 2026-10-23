@@ -1,7 +1,7 @@
 // Review layer: Claude's suggestions (teal, hover toolbar: accept / reject / discuss) and
 // selection comments (yellow, + button). Data comes from .ltxed sidecars via the server.
 import { EditorState, Facet, Range, StateEffect, StateField } from "@codemirror/state";
-import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
+import { Decoration, DecorationSet, EditorView, keymap, ViewPlugin, ViewUpdate, WidgetType } from "@codemirror/view";
 import type { ClientMsg, Comment, Suggestion } from "./protocol";
 
 export const setSuggestions = StateEffect.define<Suggestion[]>();
@@ -84,10 +84,12 @@ function place(p: HTMLElement, r: { left: number; top: number; bottom: number },
   p.style.top = `${above && r.top - h - 4 > 4 ? r.top - h - 4 : r.bottom + 4}px`;
 }
 function inputBox(onEnter: (v: string) => void, ph: string, onCancel: () => void) {
-  const i = document.createElement("input");
-  i.className = "ltx-pop-in"; i.placeholder = ph;
+  const i = document.createElement("textarea");
+  i.className = "ltx-pop-in"; i.placeholder = ph; i.rows = 1;
+  const grow = () => { i.style.height = "auto"; i.style.height = `${Math.min(i.scrollHeight, 220)}px`; };
+  i.oninput = grow;
   i.onkeydown = (e) => {
-    if (e.key === "Enter" && i.value.trim()) { e.preventDefault(); onEnter(i.value.trim()); }
+    if (e.key === "Enter" && !e.shiftKey && i.value.trim()) { e.preventDefault(); onEnter(i.value.trim()); }
     else if (e.key === "Escape") { e.preventDefault(); onCancel(); }
   };
   return i;
@@ -133,7 +135,7 @@ function showFor(target: HTMLElement) {
   }
   place(p, rect);
 }
-const scheduleHide = () => { clearTimeout(hideTimer); hideTimer = window.setTimeout(() => { if (!pop?.querySelector("input")) closePop(); }, 350); };
+const scheduleHide = () => { clearTimeout(hideTimer); hideTimer = window.setTimeout(() => { if (!pop?.querySelector("textarea")) closePop(); }, 350); };
 document.addEventListener("mouseover", (e) => {
   const t = (e.target as HTMLElement | null)?.closest?.("[data-sid],[data-cid]") as HTMLElement | null;
   if (t && t.closest(".cm-content")) { clearTimeout(hideTimer); if (!pop || (pop as any)._t !== t) { showFor(t); if (pop) (pop as any)._t = t; } }
@@ -156,8 +158,11 @@ function openComment(view: EditorView, from: number, to: number, r: { left: numb
   const i = inputBox((v) => {
     send({ type: "comment_add", comment: { file: view.state.facet(pathFacet), anchor: data, instruction: v, status: "open", author: "daniel" } });
     close();
-  }, "Comment for Claude, Enter to send", close);
-  b.append(i);
+  }, "Comment for Claude", close);
+  const save = btn("Save", "ltx-save", "Save the comment (Enter)", () => i.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" })));
+  b.classList.add("ltx-card");
+  b.append(i, el("div", "ltx-card-row", ""));
+  b.lastElementChild!.append(el("span", "ltx-card-hint", "Enter saves, Shift+Enter adds a line"), btn("Cancel", "ltx-cancel", "Cancel (Esc)", close), save);
   place(b, { left: r.left, top: r.bottom, bottom: r.bottom }, false);
   i.focus();
 }
@@ -177,7 +182,8 @@ const selectionPlus = ViewPlugin.fromClass(class {
         plusOwner = view;
         plusSel = { from: r.from, to: r.to }; // current range, not the one when the button was created
         if (!plus) {
-          plus = btn("+", "ltx-selplus", "Comment on the selection", () => {});
+          plus = btn("", "ltx-selplus", "Comment on the selection (Cmd+Alt+M)", () => {});
+          plus.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>';
           plus.onmousedown = (e) => { e.preventDefault(); openComment(view, plusSel.from, plusSel.to, plus!.getBoundingClientRect()); };
           document.body.append(plus);
         }
@@ -196,7 +202,14 @@ const registry = ViewPlugin.fromClass(class {
 
 export function reviewExtension(path: string, send_: (m: ClientMsg) => void) {
   send = send_;
-  return [pathFacet.of(path), reviewField, selectionPlus, registry];
+  const startComment = (view: EditorView) => {
+    const { from, to, empty } = view.state.selection.main;
+    const c = empty ? null : view.coordsAtPos(to);
+    if (!c) return false;
+    openComment(view, from, to, { left: c.left, bottom: c.bottom });
+    return true;
+  };
+  return [pathFacet.of(path), reviewField, selectionPlus, registry, keymap.of([{ key: "Mod-Alt-m", preventDefault: true, run: startComment }])];
 }
 const push = (e: (v: any) => StateEffect<any>, v: unknown) => views.forEach((view) => view.dispatch({ effects: e(v) }));
 export function showComments(c: Comment[]) { comments = c; push((v) => setComments.of(v), c); }
