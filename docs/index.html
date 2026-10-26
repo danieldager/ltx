@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ltx</title>
+<meta name="description" content="A local browser editor for LaTeX papers that you and Claude Code can edit at the same time.">
+<style>
+@font-face{font-family:"LM Roman";src:url(fonts/lmroman12-regular.woff2) format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"LM Roman";src:url(fonts/lmroman12-italic.woff2) format("woff2");font-weight:400;font-style:italic;font-display:swap}
+@font-face{font-family:"LM Roman";src:url(fonts/lmroman12-bold.woff2) format("woff2");font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:"LM Mono";src:url(fonts/lmmono10-regular.woff2) format("woff2");font-weight:400;font-style:normal;font-display:swap}
+:root{--bg:#fdfcf9;--fg:#1c1c1c;--muted:#5f5f5f;--rule:#d9d6cd;--accent:#8c2f1b;--code:#f1eee6}
+@media (prefers-color-scheme:dark){:root{--bg:#171715;--fg:#e8e6df;--muted:#a09d94;--rule:#3a3935;--accent:#e08a6f;--code:#22211f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:20px/1.55 "LM Roman","Latin Modern Roman",Georgia,serif}
+main{max-width:40rem;margin:0 auto;padding:3.5rem 16px 4rem}
+h1{font-size:2.6rem;margin:0;letter-spacing:.01em}
+h2{font-size:1.3rem;margin:2.6rem 0 .5rem;font-variant:small-caps;letter-spacing:.04em;border-bottom:1px solid var(--rule);padding-bottom:.2rem}
+p,li{margin:.7rem 0}
+.lede{font-style:italic;color:var(--muted);margin:.4rem 0 1.6rem;font-size:1.1rem}
+a{color:var(--accent)}
+code,pre{font-family:"LM Mono",ui-monospace,Menlo,monospace;font-size:.82em}
+code{background:var(--code);padding:.05em .3em;border-radius:3px}
+pre{background:var(--code);padding:.8rem 1rem;border-radius:4px;overflow-x:auto;line-height:1.45}
+pre code{background:none;padding:0}
+figure{margin:1.6rem 0}
+figure img{width:100%;height:auto;border:1px solid var(--rule);display:block}
+figcaption{font-size:.85rem;color:var(--muted);margin-top:.4rem}
+ul{padding-left:1.3rem}
+table{border-collapse:collapse;width:100%;font-size:.9rem;margin:1rem 0}
+th,td{text-align:left;padding:.35rem .5rem;border-top:1px solid var(--rule);vertical-align:top}
+th{border-top:2px solid var(--fg);border-bottom:1px solid var(--fg);font-weight:700}
+tr:last-child td{border-bottom:2px solid var(--fg)}
+footer{margin-top:3rem;font-size:.8rem;color:var(--muted);border-top:1px solid var(--rule);padding-top:.8rem}
+@media (max-width:560px){body{font-size:18px}h1{font-size:2.1rem}}
+</style>
+</head>
+<body>
+<main>
+<h1>ltx</h1>
+<p class="lede">A local browser editor for LaTeX papers that you and Claude Code can edit at the same time.</p>
+<p><a href="https://github.com/danieldager/ltx">Source on GitHub</a></p>
+
+<figure>
+<img src="screenshot.png" alt="ltx editing a paper: source on the left in an economics-paper layout, PDF on the right">
+<figcaption>The editor with a paper open: source on the left, background-built PDF on the right.</figcaption>
+</figure>
+
+<h2>Why</h2>
+<p>When Claude Code edits a <code>.tex</code> file while you have it open in an editor, one of you loses work: the editor reloads over your typing, or your save overwrites the edit. ltx treats the file on disk as the shared document. Your keystrokes stay local and are saved as small patches; edits that arrive from outside are merged into the open buffer within about a second, around whatever you have typed. You keep working in the browser, Claude keeps working in the terminal, and the PDF rebuilds in the background.</p>
+
+<h2>Features</h2>
+<ul>
+<li>Source buffer (CodeMirror 6) in an economics-paper look: Latin Modern type, one paragraph per line, section numbers, citation and reference chips, KaTeX math and HTML tables when the LaTeX view is off.</li>
+<li>Surgical saves: opening and saving without changes writes zero bytes; changing one word changes one line.</li>
+<li>Live merging of external edits. If you both touch the same characters, the file on disk wins and your replaced text is shown so you can re-insert it.</li>
+<li>Background PDF with tectonic, errors explained in plain words, last good PDF kept on screen.</li>
+<li>Selection, comments and suggestions written to <code>.ltxed/</code> next to the paper, where Claude Code reads them.</li>
+<li>Multi-file papers, appendix numbering across files. Everything runs on <code>127.0.0.1</code>.</li>
+</ul>
+
+<h2>Install</h2>
+<p>Needs Python 3.11+, <a href="https://docs.astral.sh/uv/">uv</a> and <a href="https://tectonic-typesetting.github.io/">tectonic</a>.</p>
+<pre><code>brew install tectonic
+uv tool install git+https://github.com/danieldager/ltx</code></pre>
+<p>To try it without installing: <code>uvx --from git+https://github.com/danieldager/ltx ltx --help</code>.</p>
+
+<h2>Use</h2>
+<pre><code>ltx new paper/            # main.tex and references.bib from a template
+ltx open paper/main.tex   # start the server, open the browser
+ltx stop paper/           # stop the server for that folder</code></pre>
+
+<h2>Use with Claude Code</h2>
+<p>Install the skill once with <code>ltx setup-claude</code> (it writes <code>~/.claude/skills/ltx/SKILL.md</code>; <code>--uninstall</code> removes it). With a paper open, talk to Claude Code in the terminal as usual. It reads these files:</p>
+<table>
+<tr><th>File</th><th>Use</th></tr>
+<tr><td><code>selection.json</code></td><td>&ldquo;rewrite this paragraph&rdquo;: the text you have selected</td></tr>
+<tr><td><code>comments.json</code></td><td>select text, add a comment, say &ldquo;do the comments&rdquo;; Claude sets status and reply</td></tr>
+<tr><td><code>suggestions.json</code></td><td>edits Claude proposes; you accept, reject or discuss each in the editor</td></tr>
+<tr><td><code>compile_errors.json</code></td><td>&ldquo;fix the build&rdquo;</td></tr>
+</table>
+<p>To have Claude pick up comments as you write them, ask it to monitor with Claude Code&rsquo;s Monitor tool and this command:</p>
+<pre><code>ltx watch paper/main.tex</code></pre>
+<p>It prints one line per newly opened comment and nothing otherwise, so each line wakes Claude, which applies the comment and goes back to waiting.</p>
+
+<h2>Status</h2>
+<p>A personal tool, tested on macOS only. No CRLF or BOM handling; files must be UTF-8 with LF line endings. Undefined reference warnings are not linked to a file. See the <a href="https://github.com/danieldager/ltx#status-and-limits">README</a> for the full list.</p>
+
+<footer>
+MIT licence. Latin Modern fonts under the GUST Font License; KaTeX (MIT), pdf.js (Apache 2.0) and CodeMirror (MIT) are bundled in the editor. &copy; 2026 Daniel Dager.
+</footer>
+</main>
+</body>
+</html>

@@ -55,17 +55,16 @@ Hard requirements:
   If compilation fails, the error is shown in plain words and Claude can pick it up.
 - **R4 Simplicity.** One local process, one browser tab, and one command to launch it.
 
-First documents it has to handle (read for this spec):
+Documents it has to handle (the test fixtures in `tests/fixtures/` are neutral stand-ins):
 
-| Doc | Size | Constructs the editor must survive |
-|---|---|---|
-| `papers/report/main.tex` (+ `appendix_prompts.tex`, `references.bib`, `figures/`) | 907 + 314 lines, 39 pp | one paragraph per source line (lines up to 1.7k chars), `\section/\subsection/\paragraph`, 26 `table`+`threeparttable`+`tablenotes`, `\[ \]`, `equation` with `\label`, inline `$..$`, 101 `\ref`/`\eqref`, `\citep`, user macros `\toconfirm{}` (red), `\ci{}{}`, `\cell{}`, `\DeclareMathOperator`, `{,}` thousands, `~`, `` ``..'' ``, `\path{}`, `\nolinkurl{}`, `\texttt{}`, `verbatim` blocks in the appendix, `figure`+`\includegraphics`, `\tableofcontents` |
-| `papers/short/main.tex` (+ `final20_table.tex`, `prompts/*.txt`) | 451 + 20 lines, 20 pp | `longtable` whose body is `\input{final20_table.tex}`, `\lstinputlisting{prompts/...}`, `tikzpicture` flow figure, `enumerate`/`itemize` with enumitem options, macros `\tc{}`/`\tbc{}` (red), `\rA/\rB/\rC` |
+| Doc | Constructs the editor must survive |
+|---|---|
+| `report/main.tex` (+ `appendix_prompts.tex`, `references.bib`, `figures/`) | one paragraph per source line (very long lines), `\section/\subsection`, `table`+`threeparttable`+`tablenotes`, `equation` with `\label`, inline `$..$`, `\ref`/`\eqref`, `\citep`, footnotes, user macros (`\toconfirm{}` in red), `itemize`, `\includegraphics`, `\appendix` + `\input` |
+| `short/main.tex` (+ `claims_table.tex`, `prompts/*.txt`) | `longtable` whose body is `\input{claims_table.tex}`, `\lstinputlisting{prompts/...}`, `itemize` with enumitem options, placeholder macros `\tc{}`/`\tbc{}` (red) |
 
 Environment probe (2026-10-12): `tectonic` 0.17.0 is at `/opt/homebrew/bin`. `node`, `npm`,
 `pandoc`, `pdflatex`, `latexmk` and `code` are all missing. `brew` and `claude` are
-present. Full tectonic compiles of copies of the docs took 1.0–2.8 s for tool (39 pp) and
-1.7 s for short. tectonic supports `--synctex`, `--keep-intermediates` and `--outdir`.
+present. Full tectonic compiles of copies of two real papers took 1.0–2.8 s and 1.7 s. tectonic supports `--synctex`, `--keep-intermediates` and `--outdir`.
 
 ## 2. Choice of base
 
@@ -99,10 +98,9 @@ source text and markup is hidden or replaced by widgets.**
   over the source buffer.
 - Verdict: **Recommended.**
 
-**(c) pandoc LaTeX ↔ HTML/Markdown round trip.** Tested on copies of both docs with
+**(c) pandoc LaTeX ↔ HTML/Markdown round trip.** Tested on copies of two real papers with
 pandoc 3.9, fetched through `uv run --with pypandoc_binary` and not installed system-wide.
-- `latex→latex`: tool goes from 907 to 2349 lines and short from 451 to 1214 lines. Diff
-  lines: 2814 and 1397.
+- `latex→latex`: a 907-line paper grows to 2349 lines and a 451-line one to 1214 lines.
 - `latex→html→latex`: about the same.
 - Concrete losses:
   - every `\ref` is hard-coded to `\hyperref[sec:x]{2}`, so all 51 refs are gone
@@ -340,7 +338,7 @@ Classes:
 - **`\input{x}`:**
   - If `x` is mostly prose, as `appendix_prompts.tex` is (headings plus verbatim), the
     card shows "Appendix: prompts (appendix_prompts.tex) [open]", which opens it in a tab.
-  - If it is table rows (`final20_table.tex`), it is locked and shown inside its parent
+  - If it is table rows (`claims_table.tex`), it is locked and shown inside its parent
     table card.
   - The heuristic: the file contains `&`/`\\` row syntax and no paragraphs.
   - v1 does not splice inputs into one continuous view. Splicing would break the
@@ -435,7 +433,7 @@ Lesser risks:
 ## 10. Test plan
 
 - **Fidelity:** for every `.tex` reachable from both roots (tool `main.tex` and
-  `appendix_prompts.tex`; short `main.tex` and `final20_table.tex`):
+  `appendix_prompts.tex`; short `main.tex` and `claims_table.tex`):
   - Open, idle, then close leaves zero bytes changed and no writes (mtime unchanged).
   - Open, then type a character and delete it: the content is byte-identical.
   - Replace one word in a 1.7k-character paragraph: `git diff --numstat` reports exactly
@@ -461,11 +459,11 @@ Lesser risks:
 - **Catalog audit:** a script extracts every `\macro` and `\begin{env}` from the corpus.
   Each must map to a class, otherwise the test fails.
 - **Scale:**
-  - Open tool (39 pp) in under 1 s.
+  - Open a 900-line paper in under 1 s.
   - Typing latency under 16 ms per keystroke with all decorations on.
   - Synthetic 5k-line doc stays usable.
 - **Claude loop (manual acceptance):** in a terminal Claude session, with ltx open on
-  short, run
+  a paper, run
   - "make this table's last column narrower" with the table selected
   - "do the comments" with 3 comments
   - "fix the build" after a deliberate break

@@ -26,16 +26,16 @@ interfaces). Scope per Daniel: personal tool, this Mac only, don't over-engineer
 - Frontend rebuild after editing `web/`: `cd web && npm run build` (writes `src/ltx/static/`).
   Typecheck: `npx tsc --noEmit`.
 - Tests: `uv run pytest tests -q` (14 tests, ~27 s; headless Chromium via Playwright; they
-  copy the draft docs into pytest tmp dirs, never touching the originals).
+  copy the fixtures into pytest tmp dirs, never touching the originals).
 
 ## Test status (all pass)
-- Open + save untouched, tool and short: bytes and mtimes unchanged.
+- Open + save untouched, report and short fixtures: bytes and mtimes unchanged.
 - Replace one word in the longest paragraph line: diff is exactly one line.
 - External edit to another paragraph during unsaved typing: both survive, cursor stays
   after the typed text, undo reverts only Daniel's typing, disk ends with both.
 - Same-region collision: disk wins, the lost text shows in the bar, re-insert works.
 - Typing: no websocket frame while typing; first save frame only after the debounce;
-  local dispatch ~1 ms per keystroke on the 907-line doc.
+  local dispatch ~1 ms per keystroke on the 900-line fixture.
 - Background compile of both docs succeeds and renders; a broken copy (unclosed itemize)
   shows "The itemize block opened on line N is never closed" and keeps the last good PDF;
   fixing it clears the strip.
@@ -44,13 +44,12 @@ interfaces). Scope per Daniel: personal tool, this Mac only, don't over-engineer
 
 ## Known issues / limits
 - On launch the server compiles and overwrites `<docroot>/main.pdf` with a fresh build
-  (spec intent; matters for the committed PDFs in the draft dirs).
+  (spec intent; matters for the committed PDFs next to the sources).
 - Undefined ref/cite warnings carry `file: null` (log file tracking not parsed).
 - Section numbering is per file (an `\input`ed appendix restarts at its own count).
 - No CRLF/BOM handling; non-BMP characters would desync offsets (docs are plain UTF-8/LF).
 - Tests that set the cursor programmatically must wait two animation frames before typing
   (helper `place()` does); real clicks are unaffected.
-- `~/dev/tools` is not a git repo, so nothing is committed.
 
 ## For the phase 2 / phase 3 agents
 - Contracts: `SPEC.md` §13 (ws messages, sidecars, offsets/hashes) and `web/protocol.ts`.
