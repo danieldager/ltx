@@ -21,6 +21,7 @@ from watchfiles import awatch
 from . import sidecar
 from .compile import Compiler
 from .sync import FileState, apply_changes, diff_changes, text_hash
+from .synctex import SyncTex
 
 STATIC = Path(__file__).parent / "static"
 _INPUT = re.compile(r"\\(?:input|include)\{([^}]+)\}")
@@ -69,6 +70,7 @@ class Session:
             self.files[rel] = FileState.load(self.docroot / rel, rel)
         self.clients: set[Client] = set()
         self.compiler = Compiler(self.docroot, self.root_tex, self.broadcast)
+        self.synctex = SyncTex(self.compiler.build_dir / f"{Path(self.root_tex).stem}.synctex.gz", self.docroot)
         self.comments_hash = text_hash(json.dumps(sidecar.load_comments(self.ltxed)))
         self.suggestions_hash = text_hash(json.dumps(sidecar.load_suggestions(self.ltxed)))
         self._watch_task: asyncio.Task | None = None
@@ -242,6 +244,18 @@ def make_app(session: Session) -> Starlette:
         return JSONResponse({"root": session.root_tex, "files": list(session.files),
                              "compile": session.compiler.last})
 
+    async def synctex(request):
+        """?file=&line= -> {page, y, y2, line}; ?page=&x=&y= -> {file, line}. Positions in PDF points from the page top."""
+        q = request.query_params
+        try:
+            if "file" in q:
+                hit = await asyncio.to_thread(session.synctex.forward, q["file"], int(q["line"]))
+            else:
+                hit = await asyncio.to_thread(session.synctex.reverse, int(q["page"]), float(q["x"]), float(q["y"]))
+        except (KeyError, ValueError):
+            return JSONResponse({"error": "bad query"}, status_code=400)
+        return JSONResponse(hit) if hit else JSONResponse({"error": "no match"}, status_code=404)
+
     async def ws_endpoint(ws: WebSocket):
         await ws.accept()
         client = Client(ws)
@@ -265,7 +279,7 @@ def make_app(session: Session) -> Starlette:
             await session.stop()
 
     return Starlette(routes=[
-        Route("/", index), Route("/pdf", pdf), Route("/api/state", state),
+        Route("/", index), Route("/pdf", pdf), Route("/api/state", state), Route("/api/synctex", synctex),
         WebSocketRoute("/ws", ws_endpoint),
         Mount("/static", StaticFiles(directory=STATIC)),
     ], lifespan=lifespan)

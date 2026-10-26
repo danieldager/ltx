@@ -40,12 +40,19 @@ def diff_changes(old: str, new: str) -> list[dict]:
     for ln in b_lines:
         b_starts.append(b_starts[-1] + len(ln))
     raw: list[tuple[int, int, str]] = []  # code-point (from, to, insert) in old
-    sm = difflib.SequenceMatcher(None, a_lines, b_lines, autojunk=False)
+    # skip the unchanged lines at both ends first: an edit to one paragraph of a long file then
+    # costs one short SequenceMatcher run instead of one over every line
+    lo, hi_a, hi_b = 0, len(a_lines), len(b_lines)
+    while lo < hi_a and lo < hi_b and a_lines[lo] == b_lines[lo]:
+        lo += 1
+    while hi_a > lo and hi_b > lo and a_lines[hi_a - 1] == b_lines[hi_b - 1]:
+        hi_a, hi_b = hi_a - 1, hi_b - 1
+    sm = difflib.SequenceMatcher(None, a_lines[lo:hi_a], b_lines[lo:hi_b], autojunk=False)
     for tag, i1, i2, j1, j2 in sm.get_opcodes():
         if tag == "equal":
             continue
-        a0, a1 = a_starts[i1], a_starts[i2]
-        b0, b1 = b_starts[j1], b_starts[j2]
+        a0, a1 = a_starts[lo + i1], a_starts[lo + i2]
+        b0, b1 = b_starts[lo + j1], b_starts[lo + j2]
         raw.extend((a0 + f, a0 + t, ins) for f, t, ins in _char_diff(old[a0:a1], new[b0:b1]))
     return [{"from": f, "to": t, "insert": ins} for f, t, ins in raw]
 
