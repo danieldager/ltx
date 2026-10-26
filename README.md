@@ -27,7 +27,12 @@ Claude keeps working in the terminal, and the PDF rebuilds in the background.
 - Background PDF with tectonic, shown beside the source; errors are explained in plain
   words and the last good PDF stays on screen.
 - Selection, comments and suggestions are written to `.ltxed/` next to your paper, where
-  Claude Code reads them.
+  Claude Code reads them. Lines that change on disk flash briefly, so you see what Claude
+  just edited.
+- Outline with word counts per section, a comments list with an open-comment badge, find
+  and replace (`Cmd+F`), and `Cmd+J` to show the cursor's place in the PDF (double-click the
+  PDF to go back).
+- A « ? » button in the toolbar explains every button, key and colour.
 - Multi-file papers (`\input`, `\include`), appendix numbering across files.
 - Everything runs on `127.0.0.1`; there is no account, cloud or telemetry.
 

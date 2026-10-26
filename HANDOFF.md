@@ -25,7 +25,7 @@ interfaces). Scope per Daniel: personal tool, this Mac only, don't over-engineer
 - `ltx new path/to/paper.tex` (or a dir → `main.tex`) + `references.bib`; `--open` to open.
 - Frontend rebuild after editing `web/`: `cd web && npm run build` (writes `src/ltx/static/`).
   Typecheck: `npx tsc --noEmit`.
-- Tests: `uv run pytest tests -q` (14 tests, ~27 s; headless Chromium via Playwright; they
+- Tests: `uv run pytest tests -q` (45 tests, ~1–2 min; headless Chromium via Playwright; they
   copy the fixtures into pytest tmp dirs, never touching the originals).
 
 ## Test status (all pass)
@@ -41,6 +41,16 @@ interfaces). Scope per Daniel: personal tool, this Mac only, don't over-engineer
   fixing it clears the strip.
 - `ltx open` launches server + browser (via $BROWSER) and reuses a running server;
   `ltx new` output compiles with tectonic.
+
+## Polish round (2026-10-26)
+- Perf: pdf.js and KaTeX split into lazy chunks (`static/chunks/`, content-hashed; app.js 1020 → 349 KB);
+  paper decorations map through prose-only edits instead of a full rebuild (`decorations/paper.ts`
+  `proseOnly`); file start numbering cached per renumber pass, not per keystroke; replaced pdf.js
+  documents destroyed (one worker, not one per rebuild); server line diff trims unchanged lines first.
+- Features: selection sidecar (`selection.ts`, was a stub), Outline + word counts and Comments list
+  (`panels.ts`, `numbering.ts` `outline()`), outside-edit flash (`flash.ts`), SynCTeX Cmd+J and PDF
+  double-click (`src/ltx/synctex.py`, `/api/synctex`), styled Cmd+F panel, « ? » help (`help.ts`: one
+  `HELP` list; a test checks it names every toolbar control).
 
 ## Known issues / limits
 - On launch the server compiles and overwrites `<docroot>/main.pdf` with a fresh build

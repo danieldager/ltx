@@ -14,7 +14,8 @@ side of the protocol is plain files in `<docroot>/.ltxed/` (next to the root `.t
 - "this paragraph", "this table", "the selected sentence", "here": read
   `.ltxed/selection.json`: `{file, line_from, line_to, from, to, text, paragraph_text,
   enclosing:{kind,label,caption}, ts}`. Lines are 1-based, `file` is relative to the docroot.
-  Check `ts` is recent; if it is stale or missing, ask which text is meant.
+  Check `ts` is recent; if it is stale or missing, ask which text is meant. An empty `text`
+  means the user only placed the cursor: "this paragraph" is then `paragraph_text`.
 - "fix the build" / "why does it not compile": read `.ltxed/compile_errors.json`:
   `{state:"ok"|"error", errors:[{file,line,plain,...}]}`. `plain` is a one-line explanation.
 - Comments: `.ltxed/comments.json`, see below.

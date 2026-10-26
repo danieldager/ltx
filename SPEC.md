@@ -587,7 +587,10 @@ server sends `external` (to all clients) before `save_conflict`. After a success
 - `build/`: tectonic output. On success the PDF is copied to `<docroot>/<stem>.pdf`.
 - `server.log`: the detached server's output.
 
-HTTP: `GET /` app, `GET /static/*` assets, `GET /pdf` last good PDF, `GET /api/state`.
+HTTP: `GET /` app, `GET /static/*` assets, `GET /pdf` last good PDF, `GET /api/state`,
+`GET /api/synctex?file=&line=` → `{page, y, y2, line}` and `?page=&x=&y=` → `{file, line}`
+(additive, 2026-10-26; positions in PDF points from the page's top-left, from
+`.ltxed/build/<stem>.synctex.gz`; 404 when there is no match).
 
 ### 13.4 Frontend modules (`web/`) and ownership
 
@@ -598,4 +601,5 @@ HTTP: `GET /` app, `GET /static/*` assets, `GET /pdf` last good PDF, `GET /api/s
 | `editor.ts` (`createEditor({parent, path, text, decorations})`), `decorations/**` (`index.ts` exports `decorationExtensions(ctx)`, `ctx = {path, getIndex(), onIndex(cb)}`), `paper.css`, new `toolbar.ts`, `input.ts` | **phase 2** |
 | `selection.ts`, `comments.ts`, `errors.ts` ("Ask Claude to fix"), `pdf.ts` SynCTeX hooks + `src/ltx/synctex.py`, `skill/ltx.md` | **phase 3** (server handlers for selection/comments/compile_errors already exist) |
 
-Build: `cd web && npm run build` writes `src/ltx/static/app.js`; rebuild after any web change.
+Build: `cd web && npm run build` writes `src/ltx/static/app.js` plus `static/chunks/` (pdf.js and
+KaTeX, loaded on first use); rebuild after any web change.
