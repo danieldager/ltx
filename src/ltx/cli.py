@@ -26,12 +26,20 @@ def _tex(path: str) -> Path:
     return p
 
 
+def _need_tectonic() -> None:
+    if not (shutil.which("tectonic") or Path("/opt/homebrew/bin/tectonic").exists()):
+        sys.exit("ltx: tectonic (the LaTeX engine ltx builds PDFs with) is not installed.\n"
+                 "  macOS:  brew install tectonic\n"
+                 "  other:  https://tectonic-typesetting.github.io/en-US/install.html")
+
+
 def cmd_open(a) -> None:
     tex = _tex(a.path)
     s = sidecar.live_session(tex.parent)
     if s and s["root_tex"] != tex.name:
         sys.exit(f"ltx: {tex.parent} is already open for {s['root_tex']} ({s['url']}); `ltx stop` it first")
     if not s:
+        _need_tectonic()
         ltxed = tex.parent / ".ltxed"
         ltxed.mkdir(exist_ok=True)
         (ltxed / "session.json").unlink(missing_ok=True)
@@ -84,6 +92,46 @@ def cmd_new(a) -> None:
         cmd_open(a)
 
 
+SKILL_SRC = Path(__file__).parent / "skill" / "SKILL.md"
+SKILL_DST = Path.home() / ".claude" / "skills" / "ltx" / "SKILL.md"
+
+
+def cmd_setup_claude(a) -> None:
+    if a.uninstall:
+        if SKILL_DST.exists():
+            SKILL_DST.unlink()
+            try:
+                SKILL_DST.parent.rmdir()
+            except OSError:
+                pass
+            print(f"removed {SKILL_DST}")
+        else:
+            print(f"nothing to remove ({SKILL_DST} does not exist)")
+        return
+    new = SKILL_SRC.read_text()
+    old = SKILL_DST.read_text() if SKILL_DST.exists() else None
+    if old == new:
+        print(f"already up to date: {SKILL_DST}")
+        return
+    SKILL_DST.parent.mkdir(parents=True, exist_ok=True)
+    SKILL_DST.write_text(new)
+    print(f"{'updated' if old is not None else 'installed'} Claude Code skill: {SKILL_DST}")
+
+
+def cmd_watch(a) -> None:
+    """Print one line per newly opened comment (for Claude Code's Monitor tool)."""
+    p = Path(a.path).expanduser().resolve()
+    f = (p if p.is_dir() else p.parent) / ".ltxed"
+    seen = {c["id"] for c in sidecar.load_comments(f)} if a.skip_existing else set()
+    while True:
+        for c in sidecar.load_comments(f):
+            if c.get("status") == "open" and c["id"] not in seen:
+                seen.add(c["id"])
+                line = (c.get("anchor") or {}).get("line", "?")
+                print(f"{c['id']} {c.get('file')}:{line} {' '.join(str(c.get('instruction', '')).split())}", flush=True)
+        time.sleep(1)
+
+
 def cmd_serve(a) -> None:
     from .server import serve
     serve(_tex(a.path), a.port)
@@ -104,6 +152,13 @@ def main() -> None:
     st = sub.add_parser("stop", help="stop the server for a document folder")
     st.add_argument("path", nargs="?", default=".")
     st.set_defaults(fn=cmd_stop)
+    sc = sub.add_parser("setup-claude", help="install the ltx skill into ~/.claude/skills/ltx/")
+    sc.add_argument("--uninstall", action="store_true")
+    sc.set_defaults(fn=cmd_setup_claude)
+    w = sub.add_parser("watch", help="print a line for each new open comment (use with Claude Code's Monitor)")
+    w.add_argument("path", nargs="?", default=".")
+    w.add_argument("--skip-existing", action="store_true", help="ignore comments already open now")
+    w.set_defaults(fn=cmd_watch)
     sv = sub.add_parser("serve", help="run the server in the foreground")
     sv.add_argument("path")
     sv.add_argument("--port", type=int, default=0)
