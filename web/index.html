@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ltx</title>
-<link rel="stylesheet" href="/static/katex/katex.min.css">
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
@@ -12,6 +11,8 @@
   <nav id="tabs"></nav>
   <span id="save-state">Saved</span>
   <span class="sep"></span>
+  <button id="outline" title="Sections and word counts">Outline</button>
+  <button id="comments" title="Your comments for Claude">Comments<span id="cmt-n" class="badge" hidden></span></button>
   <button id="justify" title="Justify text">Justify</button>
   <span class="sep"></span>
   <button id="pdf-err" hidden>PDF build failed</button>
@@ -24,7 +25,9 @@
   <button id="export" title="Copy the full LaTeX source to the clipboard">Export</button>
   <button id="latex" title="Show or hide the LaTeX markup">LaTeX</button>
   <button id="pdf" title="Show or hide the PDF">PDF</button>
+  <button id="help" aria-label="Help: buttons, keys and marks" aria-expanded="false" aria-controls="help-panel">?</button>
 </header>
+<div id="help-panel" role="tooltip" hidden></div>
 <div id="conn" hidden>Disconnected from the ltx server, retrying…</div>
 <main>
   <section id="editor-pane">

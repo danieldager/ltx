@@ -105,3 +105,8 @@ body.justify .sheet .ltx-prose, body.justify .sheet .ltx-abstract { text-align: 
 .ltx-selplus:hover { color: var(--accent); border-color: var(--accent); }
 .ltx-eq.ltx-fit-scroll, .ltx-table.ltx-fit-scroll { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
 .ltx-eq, .ltx-table { overflow: hidden; }
+/* outside edit: a teal tint on the changed lines that fades out */
+.sheet .ltx-flash { animation: ltx-flash 2.5s ease-out forwards; }
+@keyframes ltx-flash { from { box-shadow: inset 3px 0 0 rgba(31, 107, 102, .6), inset 0 0 0 100vmax rgba(31, 107, 102, .12); }
+  to { box-shadow: inset 3px 0 0 rgba(31, 107, 102, 0), inset 0 0 0 100vmax rgba(31, 107, 102, 0); } }
+@media (prefers-reduced-motion: reduce) { .sheet .ltx-flash { animation: none; box-shadow: inset 3px 0 0 rgba(31, 107, 102, .6); } .pdf-mark { animation: none; } }

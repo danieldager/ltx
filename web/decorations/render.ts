@@ -1,5 +1,14 @@
 // LaTeX source -> HTML for the word view: inline prose, KaTeX math, tables. Pure functions.
-import katex from "katex";
+// KaTeX (script + stylesheet) is loaded on first use: main.ts awaits loadMath() before the word view builds.
+type Katex = { renderToString(src: string, opts: object): string };
+let katex: Katex | null = null, katexP: Promise<void> | null = null;
+export const mathReady = () => katex !== null;
+export function loadMath(): Promise<void> {
+  return (katexP ??= Promise.all([
+    import("katex").then((m) => { katex = m.default; }),
+    new Promise<void>((ok) => { const l = document.createElement("link"); l.rel = "stylesheet"; l.href = "/static/katex/katex.min.css"; l.onload = l.onerror = () => ok(); document.head.insertBefore(l, document.querySelector("link[href*='app.css']")); }), // before app.css, which overrides it
+  ]).then(() => memo.clear()));
+}
 
 export type Macros = Record<string, { nargs: number; body: string }>;
 export let macros: Macros = {};
@@ -44,8 +53,9 @@ export function macroColor(name: string, d = 0): string | null {
 }
 
 export function mathHtml(src: string, display: boolean): string | null {
-  if (!src.trim()) return null;
-  return cached(`${display ? "D" : "I"}${src}`, () => katex.renderToString(src, {
+  if (!src.trim() || !katex) return null;
+  const k = katex;
+  return cached(`${display ? "D" : "I"}${src}`, () => k.renderToString(src, {
     displayMode: display, throwOnError: true, strict: "ignore", output: "html",
     macros: Object.fromEntries(Object.entries(macros).map(([k, v]) => ["\\" + k, v.body])),
   }));

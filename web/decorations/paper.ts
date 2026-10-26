@@ -20,6 +20,7 @@ let startOf: (v: EditorView) => NumState | null = () => null;
 export const renumber = StateEffect.define<null>();
 export function setStartProvider(f: (v: EditorView) => NumState | null) { startOf = f; }
 const line = (cls: string) => Decoration.line({ class: cls });
+const CONTROL = /^\s*\\(maketitle|tableofcontents|clearpage|newpage|pagenumbering|thispagestyle|appendix|bibliography|bibliographystyle|begin\{document\}|end\{document\}|label)/;
 
 /** End offset (exclusive, after the closing brace) of the {group} starting at `open`. */
 function groupEnd(doc: string, open: number): number {
@@ -81,7 +82,7 @@ function build(view: EditorView): DecorationSet {
       }
     } else if (!t.trim()) kind = "blank";
     else if (/^\s*%/.test(t)) { cls = "ltx-comment-line"; kind = "comment"; }
-    else if (/^\s*\\(maketitle|tableofcontents|clearpage|newpage|pagenumbering|thispagestyle|appendix|bibliography|bibliographystyle|begin\{document\}|end\{document\}|label)/.test(t)) {
+    else if (CONTROL.test(t)) {
       cls = "ltx-control"; kind = "control";
     }
     if (inAbstract) {
@@ -102,8 +103,30 @@ function build(view: EditorView): DecorationSet {
   return Decoration.set(decos, true);
 }
 
+// Everything build() looks at on a line: blankness, the heading/control/comment tests and its markup
+// tokens (whitespace inside a token kept apart, so `\section x{` differs from `\section{`). Plain words
+// are not in it, so typing prose leaves the signature unchanged.
+const SIG = /\\(?:begin|end)\s*\{[^}]*\}?|\\[A-Za-z@]+\*?\s*\{?|\\.|(?<!\\)%|[{}]|JEL|Keywords/gi;
+const sig = (t: string) => `${+!t.trim()}${+/^\s*%/.test(t)}${+CONTROL.test(t)}${HEAD.exec(t)?.[0] ?? ""}\u0000${(t.match(SIG) ?? []).join("\u0000")}`;
+
+/** True if `u` only edited prose inside single lines: the structure is the old one, shifted. */
+function proseOnly(u: ViewUpdate): boolean {
+  if (u.startState.doc.lines !== u.state.doc.lines) return false;
+  const a = u.startState.doc, b = u.state.doc;
+  let ok = true;
+  u.changes.iterChangedRanges((fA, tA, fB, tB) => {
+    if (!ok) return;
+    const la = a.lineAt(fA), lb = b.lineAt(fB);
+    ok = la.number === a.lineAt(tA).number && lb.number === b.lineAt(tB).number && la.number === lb.number && sig(la.text) === sig(lb.text);
+  });
+  return ok;
+}
+
 export const paperStructure = ViewPlugin.fromClass(class {
   decorations: DecorationSet;
   constructor(view: EditorView) { this.decorations = build(view); }
-  update(u: ViewUpdate) { if (u.docChanged || u.transactions.some((t) => t.effects.some((e) => e.is(renumber)))) this.decorations = build(u.view); }
+  update(u: ViewUpdate) {
+    if (u.transactions.some((t) => t.effects.some((e) => e.is(renumber)))) this.decorations = build(u.view);
+    else if (u.docChanged) this.decorations = proseOnly(u) ? this.decorations.map(u.changes) : build(u.view);
+  }
 }, { decorations: (v) => v.decorations });

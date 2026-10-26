@@ -2,19 +2,23 @@
 import type { EditorView } from "@codemirror/view";
 import { EditorView as EV, keymap } from "@codemirror/view";
 import { EditorSelection } from "@codemirror/state";
-import type { ClientMsg, CompileMsg, IndexMsg, ServerMsg, WireFile } from "./protocol";
+import type { ClientMsg, Comment, CompileMsg, IndexMsg, ServerMsg, WireFile } from "./protocol";
 import { FileSync, Replaced } from "./sync";
 import { createEditor } from "./editor";
 import { PdfPane } from "./pdf";
 import { renderErrors } from "./errors";
 import { selectionExtension } from "./selection";
-import { showComments, showSuggestions } from "./review";
+import { locateComment, showComments, showSuggestions } from "./review";
+import { externalFlash } from "./flash";
+import { fillComments, fillOutline, menu } from "./panels";
+import { helpButton } from "./help";
 import { flatten } from "./flatten";
-import { fileStarts } from "./numbering";
+import { fileStarts, NumState, outline } from "./numbering";
 import { renumber, setStartProvider } from "./decorations/paper";
 import { setWord } from "./decorations/index";
 import { setLabels } from "./decorations/render";
 import { setMacros, visiblePos } from "./decorations/wordview";
+import { loadMath, mathReady } from "./decorations/render";
 
 const $ = (id: string) => document.getElementById(id)!;
 const syncs = new Map<string, FileSync>();
@@ -24,11 +28,23 @@ let rootPath = "main.tex";
 let ws: WebSocket;
 let index: IndexMsg | null = null;
 const indexListeners: ((i: IndexMsg) => void)[] = [(i) => { setMacros(i.macros); setLabels(i.labels); if (word) syncs.forEach((s) => s.view.dispatch({ effects: setWord.of(true) })); }];
-setStartProvider((view) => {
+/** The word view needs KaTeX, loaded on first use: until it arrives math shows as source, then the view redraws. */
+function needMath() {
+  if (!mathReady()) loadMath().then(() => { if (word) anchored(syncs.get(active)?.view, () => syncs.forEach((s) => s.view.dispatch({ effects: setWord.of(true) }))); });
+}
+// numbering state at the start of each file: computed in scheduleRenumber, not per keystroke
+// (a file's own edits never move its own start, only the starts of files after it)
+let starts: Record<string, NumState> | null = null;
+const allStarts = () => {
   const texts: Record<string, string> = {};
+  syncs.forEach((s, p) => (texts[p] = s.view?.state.doc.toString() ?? ""));
+  return fileStarts(rootPath, texts);
+};
+setStartProvider((view) => {
   let path = "";
-  syncs.forEach((s, p) => { texts[p] = s.view?.state.doc.toString() ?? ""; if (s.view === view) path = p; });
-  return fileStarts(rootPath, texts)[path] ?? null;
+  syncs.forEach((s, p) => { if (s.view === view) path = p; });
+  starts ??= allStarts();
+  return starts[path] ?? null;
 });
 const pdf = new PdfPane($("pdf-scroll"));
 let lastCompile: CompileMsg | null = null;
@@ -72,11 +88,9 @@ const lastStart = new Map<string, string>();
 function scheduleRenumber(_from?: EditorView) {
   clearTimeout(renumberTimer);
   renumberTimer = window.setTimeout(() => {
-    const texts: Record<string, string> = {};
-    syncs.forEach((s, p) => (texts[p] = s.view.state.doc.toString()));
-    const starts = fileStarts(rootPath, texts);
+    starts = allStarts();
     syncs.forEach((s, p) => {
-      const sig = JSON.stringify(starts[p] ?? null);
+      const sig = JSON.stringify(starts![p] ?? null);
       if (lastStart.get(p) !== sig) { lastStart.set(p, sig); s.view.dispatch({ effects: renumber.of(null) }); }
     });
   }, 150);
@@ -98,12 +112,15 @@ function addFile(f: WireFile) {
     extra: [
       EV.updateListener.of((u) => { sync.onUpdate(u); if (u.docChanged) scheduleRenumber(u.view); }),
       EV.domEventHandlers({ blur: () => { sync.flush(); } }),
-      keymap.of([{ key: "Mod-s", preventDefault: true, run: () => { sync.flush(); return true; } }]),
+      keymap.of([{ key: "Mod-s", preventDefault: true, run: () => { sync.flush(); return true; } },
+                 { key: "Mod-j", preventDefault: true, run: (v) => { toPdf(f.path, v.state.doc.lineAt(v.state.selection.main.head).number); return true; } }]),
       ...selectionExtension(f.path, send),
+      externalFlash,
     ],
   });
   if (word) sync.view.dispatch({ effects: setWord.of(true) });
   syncs.set(f.path, sync);
+  starts = null;
   scheduleRenumber(sync.view);
   const tab = document.createElement("button");
   tab.textContent = f.path;
@@ -129,6 +146,31 @@ function jump(file: string | null, line: number) {
   v.focus();
 }
 
+/** Select `from..to` in `path` and scroll it to the upper third of the sheet. */
+function goTo(path: string, from: number, to = from) {
+  activate(path);
+  const v = syncs.get(path)!.view;
+  v.dispatch({ selection: EditorSelection.single(from, to), effects: EV.scrollIntoView(from, { y: "start", yMargin: 120 }) });
+  v.focus();
+}
+
+// SynCTeX: Cmd+J shows the cursor line in the PDF; a double-click in the PDF goes back to the source
+async function toPdf(path: string, line: number) {
+  const r = await fetch(`/api/synctex?file=${encodeURIComponent(path)}&line=${line}`);
+  if (!r.ok) return banner(lastCompile?.pdf_url ? "No PDF position for this line yet" : "No PDF yet");
+  const hit = await r.json();
+  if (!pdfOn) setPdfUser(true);
+  pdf.reveal(hit.page, hit.y, hit.y2);
+}
+pdf.onPick = async (page, x, y) => {
+  const r = await fetch(`/api/synctex?page=${page}&x=${x}&y=${y}`);
+  if (!r.ok) return;
+  const hit = await r.json();
+  if (!syncs.has(hit.file)) return;
+  const d = syncs.get(hit.file)!.view.state.doc;
+  goTo(hit.file, d.line(Math.min(hit.line, d.lines)).from);
+};
+
 function onCompile(m: CompileMsg) {
   lastCompile = m;
   const st = $("compile-state");
@@ -147,11 +189,12 @@ function onMessage(m: ServerMsg) {
         if (!s) addFile(f);
         else s.resume(f.text, f.hash);
       }
+      if (rootPath !== m.root) starts = null;
       rootPath = m.root;
       if (!active) activate(m.root);
       if (m.index) { index = m.index; indexListeners.forEach((cb) => cb(m.index!)); }
       if (m.compile) onCompile(m.compile);
-      showComments(m.comments);
+      onComments(m.comments);
       showSuggestions(m.suggestions ?? []);
       break;
     case "saved": syncs.get(m.path)?.onSaved(m.hash); break;
@@ -161,11 +204,36 @@ function onMessage(m: ServerMsg) {
     case "file_added": if (!syncs.has(m.file.path)) addFile(m.file); break;
     case "compile": onCompile(m); break;
     case "index": index = m; indexListeners.forEach((cb) => cb(m)); break;
-    case "comments": showComments(m.comments); break;
+    case "comments": onComments(m.comments); break;
     case "suggestions": showSuggestions(m.suggestions); break;
     case "error": banner(`Problem: ${m.msg}`); break;
   }
 }
+
+// toolbar drop-downs: outline and comments
+let allComments: Comment[] = [];
+menu($("outline"), (p) => {
+  const texts: Record<string, string> = {};
+  syncs.forEach((s, path) => (texts[path] = s.view.state.doc.toString()));
+  fillOutline(p, outline(rootPath, texts), (h) => { const d = syncs.get(h.file)!.view.state.doc; goTo(h.file, d.line(Math.min(h.line, d.lines)).from); });
+});
+const commentsMenu = menu($("comments"), (p) => fillComments(p, allComments, (c) => {
+  const s = syncs.get(c.file);
+  if (!s) return;
+  const at = locateComment(s.view, c);
+  if (at) goTo(c.file, at.from, at.to);
+  else { goTo(c.file, s.view.state.doc.line(Math.min(Math.max(c.anchor.line, 1), s.view.state.doc.lines)).from); banner("The commented text is no longer in the file; showing its old line"); }
+}, () => commentsMenu.refresh()));
+function onComments(c: Comment[]) {
+  allComments = c;
+  showComments(c);
+  const n = c.filter((x) => x.status === "open").length, badge = $("cmt-n");
+  badge.textContent = String(n);
+  badge.hidden = !n;
+  $("comments").title = `Your comments for Claude (${n} open)`;
+  commentsMenu.refresh();
+}
+helpButton($("help"), $("help-panel"));
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
@@ -206,6 +274,7 @@ function anchored(view: EditorView | undefined, fn: () => void) {
 
 function setLatex(show: boolean) {
   word = !show;
+  if (word) needMath();
   document.body.classList.toggle("word", word);
   const act = syncs.get(active)?.view;
   syncs.forEach((s) => {

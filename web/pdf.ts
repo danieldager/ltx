@@ -1,7 +1,11 @@
 // PDF pane: pdf.js, lazy page rendering, new revisions swapped in place at the same scroll.
-import * as pdfjs from "pdfjs-dist";
+// pdf.js itself is loaded on first use (the pane is hidden by default).
+import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
 
-pdfjs.GlobalWorkerOptions.workerSrc = "/static/pdf.worker.min.mjs";
+interface Loaded { task: PDFDocumentLoadingTask; doc: PDFDocumentProxy }
+
+let lib: Promise<typeof import("pdfjs-dist")> | null = null;
+const pdfjs = () => (lib ??= import("pdfjs-dist").then((m) => { m.GlobalWorkerOptions.workerSrc = "/static/pdf.worker.min.mjs"; return m; }));
 
 const GAP = 12;
 
@@ -9,16 +13,52 @@ export class PdfPane {
   private pagesEl: HTMLElement | null = null;
   private loading = 0;
   private observer: IntersectionObserver | null = null;
+  private cur: Loaded | null = null; // the one on screen; replaced ones are destroyed (frees their worker)
   rev = -1;
   zoom = 1; // multiplier on fit-width
+  private pages: HTMLElement[] = [];
+  private scale = 1; // CSS px per PDF point
+  private target: { page: number; y: number; y2: number } | null = null;
+  /** Double-click on a page: page number and position in PDF points from its top-left (SynCTeX reverse). */
+  onPick: (page: number, x: number, y: number) => void = () => {};
 
-  constructor(readonly scroller: HTMLElement) {}
+  constructor(readonly scroller: HTMLElement) {
+    scroller.addEventListener("dblclick", (e) => {
+      const slot = (e.target as HTMLElement).closest<HTMLElement>(".pdf-page"), i = slot ? this.pages.indexOf(slot) : -1;
+      if (i < 0) return;
+      const r = slot!.getBoundingClientRect();
+      this.onPick(i + 1, (e.clientX - r.left) / this.scale, (e.clientY - r.top) / this.scale);
+    });
+  }
 
-  async show(url: string, rev: number) {
+  /** Scroll to a spot (PDF points from the page top; y = first baseline, y2 = last) and mark it briefly. */
+  reveal(page: number, y: number, y2 = y) {
+    this.target = { page, y, y2 };
+    if (this.pagesEl) this.applyTarget();
+  }
+
+  private applyTarget() {
+    const t = this.target!, slot = this.pages[t.page - 1];
+    if (!slot) return;
+    this.target = null;
+    const sc = this.scroller, top = slot.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop + (t.y - 12) * this.scale;
+    sc.scrollTop = top - sc.clientHeight / 3;
+    const m = document.createElement("div");
+    m.className = "pdf-mark";
+    m.style.top = `${(t.y - 11) * this.scale}px`;
+    m.style.height = `${(Math.min(t.y2 - t.y, 160) + 14) * this.scale}px`; // a long block: mark its start
+    slot.append(m);
+    window.setTimeout(() => m.remove(), 1800);
+  }
+
+  async show(url: string, rev: number, reuse = false) {
     if (rev === this.rev && this.pagesEl) return;
     const ticket = ++this.loading;
-    const doc = await pdfjs.getDocument({ url }).promise;
-    if (ticket !== this.loading) return;
+    let ld = reuse ? this.cur : null;
+    if (!ld) { const task = (await pdfjs()).getDocument({ url }); ld = { task, doc: await task.promise }; }
+    const L = ld, doc = L.doc;
+    const drop = () => { if (L !== this.cur) L.task.destroy(); };
+    if (ticket !== this.loading) return drop();
     const pages = await Promise.all(Array.from({ length: doc.numPages }, (_, i) => doc.getPage(i + 1)));
     const width = this.scroller.clientWidth - 2 * GAP;
     const scale = (width / pages[0].getViewport({ scale: 1 }).width) * this.zoom;
@@ -49,7 +89,7 @@ export class PdfPane {
     let y = GAP;
     const visible = slots.filter((s) => { const a = y, b = y + s.vp.height; y = b + GAP; return b >= top && a <= bottom; });
     await Promise.all(visible.map(render));
-    if (ticket !== this.loading) return;
+    if (ticket !== this.loading) return drop();
     this.observer?.disconnect();
     this.observer = new IntersectionObserver((entries) => {
       for (const e of entries) if (e.isIntersecting) render(slots.find((s) => s.slot === e.target)!);
@@ -58,12 +98,17 @@ export class PdfPane {
     if (this.pagesEl) this.pagesEl.replaceWith(wrap); else this.scroller.append(wrap);
     this.scroller.scrollTop = top;
     this.pagesEl = wrap;
+    this.pages = slots.map((x) => x.slot);
+    this.scale = scale;
     this.rev = rev;
+    if (this.cur !== L) this.cur?.task.destroy();
+    this.cur = L;
+    if (this.target) this.applyTarget();
   }
 
   async rezoom(url: string) {
     const r = this.rev;
     this.rev = -1;
-    await this.show(url, r);
+    await this.show(url, r, true); // same revision: re-render the loaded document, no refetch
   }
 }

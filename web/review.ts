@@ -213,4 +213,10 @@ export function reviewExtension(path: string, send_: (m: ClientMsg) => void) {
 }
 const push = (e: (v: any) => StateEffect<any>, v: unknown) => views.forEach((view) => view.dispatch({ effects: e(v) }));
 export function showComments(c: Comment[]) { comments = c; push((v) => setComments.of(v), c); }
+/** Where comment `c` sits in `view` now (the highlight's anchoring, whatever its status), or null. */
+export function locateComment(view: EditorView, c: Comment): { from: number; to: number } | null {
+  const doc = view.state.doc, a = c.anchor;
+  const i = find(doc.toString(), a.prefix, a.quote, a.suffix, a.line, (n) => doc.line(Math.min(Math.max(n, 1), doc.lines)).from);
+  return i < 0 || !a.quote ? null : { from: i, to: i + a.quote.length };
+}
 export function showSuggestions(s: Suggestion[]) { suggestions = s; push((v) => setSuggestions.of(v), s); }

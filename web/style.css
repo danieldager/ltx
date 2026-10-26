@@ -55,3 +55,65 @@ body.no-pdf #pdf-pane, body.no-pdf #split { display: none; }
 .sl { display: flex; align-items: center; gap: 3px; color: var(--muted); }
 .sl input { width: 70px; accent-color: var(--accent); }
 #pdf-scroll, #tabs, .errors, .cm-scroller { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,.28) transparent; }
+/* toolbar drop-downs (Outline, Comments) */
+#bar .badge { display: inline-block; min-width: 16px; margin-left: 5px; padding: 0 5px; border-radius: 8px; background: var(--accent); color: #fff;
+  font-size: 10.5px; line-height: 16px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
+#bar .badge[hidden] { display: none; }
+#bar #help { width: 24px; height: 24px; padding: 0; border-radius: 50%; border-color: var(--line); color: var(--muted); font-weight: 600; }
+#bar #help:hover, #bar #help[aria-expanded="true"] { color: var(--ink); border-color: #bdb9af; }
+#bar #help.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.ltx-menu { position: fixed; z-index: 60; min-width: 280px; max-width: min(440px, calc(100vw - 16px)); max-height: 70vh; overflow-y: auto; padding: 6px;
+  background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.12); font: 13px/1.4 var(--ui); scrollbar-width: thin; }
+.ltx-menu-head, .ltx-menu-empty { color: var(--muted); font-size: 12px; padding: 4px 8px 6px; }
+.ltx-menu-item { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent;
+  font: inherit; color: var(--ink); text-align: left; cursor: pointer; }
+.ltx-menu-item:hover { background: rgba(0, 0, 0, .05); }
+.ltx-menu-item:focus-visible, .ltx-menu-filter button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ltx-ol1 { font-weight: 600; } .ltx-ol2 { padding-left: 24px; } .ltx-ol3 { padding-left: 40px; color: #4a4843; }
+.ltx-ol-num { min-width: 26px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ltx-ol-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ltx-ol-words { color: var(--muted); font-weight: 400; font-size: 12px; font-variant-numeric: tabular-nums; }
+.ltx-menu-filter { display: flex; gap: 2px; padding: 2px 2px 6px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.ltx-menu-filter button { font: 12px/1.3 var(--ui); color: var(--muted); border: 0; background: transparent; border-radius: 6px; padding: 3px 9px; cursor: pointer; }
+.ltx-menu-filter button:hover { background: rgba(0, 0, 0, .05); }
+.ltx-menu-filter button.on { background: var(--ink); color: #fff; }
+.ltx-cm { flex-direction: column; align-items: stretch; gap: 1px; padding: 6px 8px 6px 10px; border-left: 3px solid transparent; border-radius: 0 6px 6px 0; }
+.ltx-cm-open { border-left-color: rgba(232, 190, 60, .8); } .ltx-cm-done { border-left-color: #4a7a4f; } .ltx-cm-wontdo { border-left-color: var(--line); }
+.ltx-cm-quote { font: italic 14px/1.35 var(--serif); color: #5d5a53; }
+.ltx-cm-reply { color: #4a4843; font-size: 12px; }
+.ltx-cm-meta { color: var(--muted); font-size: 11px; }
+/* « ? » panel */
+#help-panel { position: fixed; z-index: 70; top: 42px; right: 10px; width: min(720px, calc(100vw - 20px)); max-height: calc(100vh - 56px); overflow-y: auto;
+  columns: 2 300px; column-gap: 24px; padding: 12px 16px 6px; background: #fff; border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.14); font: 12px/1.4 var(--ui); color: #3b3a36; scrollbar-width: thin; }
+#help-panel[hidden] { display: none; }
+#help-panel section { break-inside: avoid; margin-bottom: 10px; }
+#help-panel .help-group { font-weight: 600; color: var(--ink); font-size: 12px; margin-bottom: 4px; }
+#help-panel dl { display: grid; grid-template-columns: minmax(70px, max-content) 1fr; gap: 3px 10px; margin: 0; }
+#help-panel dt { color: var(--ink); white-space: nowrap; }
+#help-panel dd { margin: 0; color: #5d5a53; }
+#help-panel kbd { font: 11px/1.5 var(--ui); padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: #faf9f6; white-space: pre; }
+#help-panel .ltx-sug, #help-panel .ltx-cmt, #help-panel .ltx-help-red, #help-panel .ltx-help-ref, #help-panel .ltx-flash-sample { font: 14px var(--serif); padding: 0 2px; }
+#help-panel .ltx-chip { display: inline-block; margin: 0; padding: 0 5px; font-size: 11px; }
+.ltx-help-grey { font: 11px var(--mono); color: var(--mute); }
+.ltx-help-red { color: red; }
+.ltx-help-ref { color: var(--mute); }
+.ltx-flash-sample { box-shadow: inset 3px 0 0 rgba(31, 107, 102, .6); background: rgba(31, 107, 102, .12); }
+.ltx-help-replaced { background: #f6efd9; padding: 0 4px; border-radius: 2px; }
+/* PDF: SynCTeX target mark */
+.pdf-page { position: relative; }
+.pdf-mark { position: absolute; left: 5%; right: 5%; border-radius: 3px; background: rgba(58, 95, 143, .2); pointer-events: none; animation: ltx-fade 1.8s ease-out forwards; }
+@keyframes ltx-fade { 0%, 45% { opacity: 1; } 100% { opacity: 0; } }
+/* find and replace (Cmd+F): CodeMirror's panel in the chrome's type */
+.sheet .cm-editor .cm-panels { background: var(--bar); color: var(--ink); border-color: var(--line); font: 12px/1.4 var(--ui); }
+.sheet .cm-editor .cm-panels-top { border-bottom: 1px solid var(--line); }
+.sheet .cm-editor .cm-search { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 6px 34px 6px 12px; font: inherit; }
+.sheet .cm-editor .cm-search br { flex-basis: 100%; content: ""; }
+.sheet .cm-editor .cm-search label { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 12px; }
+.sheet .cm-editor .cm-textfield { font: 13px var(--ui); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; margin: 0; }
+.sheet .cm-editor .cm-textfield:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.sheet .cm-editor .cm-button { font: 12px var(--ui); color: var(--ink); background: #fff; background-image: none; border: 1px solid var(--line); border-radius: 6px; padding: 3px 9px; margin: 0; cursor: pointer; }
+.sheet .cm-editor .cm-button:hover { background: #f1efea; }
+.sheet .cm-editor .cm-search [name=close] { top: 7px; right: 10px; font-size: 16px; color: var(--muted); cursor: pointer; }
+.sheet .cm-editor .cm-searchMatch { background: rgba(58, 95, 143, .14); outline: 1px solid rgba(58, 95, 143, .3); }
+.sheet .cm-editor .cm-searchMatch-selected { background: rgba(58, 95, 143, .32); }

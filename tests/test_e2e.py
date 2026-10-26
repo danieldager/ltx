@@ -618,3 +618,175 @@ def test_appendix_numbering_carries_into_input_file(browser, copy_doc, serve):
     page.wait_for_selector(".sheet:not([hidden]) .ltx-secnum")
     first = lambda: page.locator(".sheet:not([hidden]) .ltx-secnum").first.inner_text()
     wait_for(lambda: re.fullmatch(r"[A-Z]\.\d+", first()), what="appendix letter numbering")
+
+
+# ---- polish round: selection sidecar, outline, comments panel, outside-edit flash, help, SynCTeX, lazy chunks ----
+
+def test_selection_sidecar_written_after_selection_settles(browser, copy_doc, serve):
+    root = copy_doc("multi")
+    s = serve(root / "main.tex")
+    page = open_page(browser, s, pdf=False)
+    text = doc(page)
+    i = text.index("This section describes")
+    place(page, i, i + 22)
+    p = root / ".ltxed/selection.json"
+    sel = wait_for(lambda: p.exists() and json.loads(p.read_text()), what="selection.json")
+    assert sel["file"] == "main.tex" and sel["text"] == "This section describes"
+    assert sel["from"] == i and sel["line_from"] == text[:i].count("\n") + 1
+    assert "This section describes" in sel["paragraph_text"] and "\n\n" not in sel["paragraph_text"]
+    assert sel["enclosing"] and sel["enclosing"]["kind"] in ("section", "subsection")
+    assert doc(page) == text
+
+
+def test_outline_lists_sections_with_words_and_jumps(browser, copy_doc, serve):
+    root = copy_doc("multi")
+    s = serve(root / "main.tex")
+    page = open_page(browser, s, pdf=False)
+    page.click("#outline")
+    items = page.locator(".ltx-menu .ltx-menu-item")
+    nums = [items.nth(k).locator(".ltx-ol-num").inner_text() for k in range(items.count())]
+    assert nums[:3] == ["1", "1.1", "1.2"] and "A" in nums  # appendix letters carried across \input files
+    assert re.match(r"[\d,]+ words", page.locator(".ltx-menu-head").inner_text())
+    k = nums.index("1.2")
+    title = items.nth(k).locator(".ltx-ol-title").inner_text()
+    items.nth(k).click()
+    assert page.locator(".ltx-menu").count() == 0
+    page.wait_for_function("() => document.querySelector('#tabs button.on').dataset.path === 'sec_results.tex'")
+    line = page.evaluate("() => { const v = window.__ltx.view('sec_results.tex'); return v.state.doc.lineAt(v.state.selection.main.head).text; }")
+    assert line.lstrip().startswith("\\subsection") and title in line
+
+
+def test_comments_panel_badge_filter_and_jump(browser, copy_doc, serve):
+    root = copy_doc("multi")
+    s = serve(root / "main.tex")
+    page = open_page(browser, s, pdf=False)
+    text = doc(page)
+
+    def c(cid, quote, status, reply=None):
+        i = text.index(quote)
+        return {"id": cid, "file": "main.tex", "anchor": {"quote": quote, "prefix": text[max(0, i - 40):i], "suffix": text[i + len(quote):i + len(quote) + 40],
+                "line": text[:i].count("\n") + 1}, "instruction": f"do {cid}", "status": status, "reply": reply, "author": "daniel",
+                "created_at": "2026-10-26T10:00:00Z", "updated_at": "2026-10-26T10:00:00Z"}
+    write_sidecar(root, "comments.json", "comments", [c("c_a", "This section describes", "open"), c("c_b", "\\section{Methodology}", "open"),
+                                                      c("c_c", "describes", "done", "fixed it")])
+    page.wait_for_function("() => document.getElementById('cmt-n').textContent === '2' && !document.getElementById('cmt-n').hidden")
+    page.click("#comments")
+    assert page.locator(".ltx-menu .ltx-cm").count() == 2
+    page.locator(".ltx-menu-filter button", has_text="Answered").click()
+    assert page.locator(".ltx-menu .ltx-cm").count() == 1 and "Claude: fixed it" in page.locator(".ltx-menu .ltx-cm").inner_text()
+    page.locator(".ltx-menu-filter button", has_text="All").click()
+    assert page.locator(".ltx-menu .ltx-cm").count() == 3
+    page.locator(".ltx-menu .ltx-cm", has_text="do c_a").click()
+    i = text.index("This section describes")
+    assert page.evaluate("() => { const m = window.__ltx.view().state.selection.main; return [m.from, m.to]; }") == [i, i + 22]
+    write_sidecar(root, "comments.json", "comments", [])  # Claude (or anyone) clears them: badge goes
+    page.wait_for_function("() => document.getElementById('cmt-n').hidden")
+
+
+def test_outside_edit_flashes_the_changed_line_then_fades(browser, copy_doc, serve):
+    root = copy_doc("multi")
+    s = serve(root / "main.tex")
+    page = open_page(browser, s, pdf=False)
+    text = doc(page)
+    i = text.index("This section describes")
+    page.evaluate("(i) => { const v = window.__ltx.view(); v.dispatch({effects: v.constructor.scrollIntoView(i, {y: 'center'})}); }", i)
+    (root / "main.tex").write_text(text[:i] + "FLASHED " + text[i:])
+    page.wait_for_selector(".sheet:not([hidden]) .ltx-flash", state="attached")
+    assert page.locator(".sheet:not([hidden]) .ltx-flash").count() == 1
+    assert "FLASHED This section describes" in page.locator(".sheet:not([hidden]) .ltx-flash").inner_text()
+    page.wait_for_selector(".sheet:not([hidden]) .ltx-flash", state="detached", timeout=6000)
+
+
+def test_help_panel_covers_every_toolbar_control(browser, copy_doc, serve):
+    root = copy_doc("short")
+    s = serve(root / "main.tex")
+    page = open_page(browser, s, pdf=False)
+    assert page.locator("#help-panel").is_hidden()
+    page.hover("#help")
+    page.wait_for_selector("#help-panel", state="visible")
+    body = page.locator("#help-panel").inner_text()
+    for g in ("Toolbar", "Keys", "In the text", "With Claude"):
+        assert g in body
+    # every control in the bar has an entry: the panel is generated from one list that names them
+    ids = page.evaluate("() => [...document.querySelectorAll('#bar button[id], #bar input[id], #bar > span[id]')].map(e => e.id)")
+    src = (Path(__file__).parent.parent / "web" / "help.ts").read_text()
+    covered = {x for m in re.finditer(r'id: "([^"]+)"', src) for x in m.group(1).split()}
+    assert set(ids) - {"tabs"} <= covered, set(ids) - covered
+    page.mouse.move(200, 600)
+    page.wait_for_selector("#help-panel", state="hidden")
+    page.focus("#help")  # keyboard users get it on focus too
+    page.wait_for_selector("#help-panel", state="visible")
+    page.keyboard.press("Escape")
+    page.wait_for_selector("#help-panel", state="hidden")
+    page.click("#help")  # tap pins it open
+    page.mouse.move(200, 600)
+    page.wait_for_timeout(400)
+    assert page.locator("#help-panel").is_visible()
+
+
+def test_synctex_cmd_j_shows_line_in_pdf_and_double_click_returns(browser, copy_doc, serve):
+    root = copy_doc("short")
+    (root / "main.pdf").unlink(missing_ok=True)
+    s = serve(root / "main.tex")
+    page = open_page(browser, s, pdf=False)
+    wait_for(lambda: (root / ".ltxed/compile_errors.json").exists() and s.compile_state()["state"] == "ok", timeout=90, what="build")
+    text = doc(page)
+    i = text.index("\\section{Part 2}")
+    line = text[:i].count("\n") + 1
+    place(page, i + 12)
+    page.keyboard.press("Meta+j")
+    page.wait_for_selector(".pdf-mark", state="attached", timeout=30000)  # turns the PDF pane on and marks the spot
+    assert page.evaluate("() => !document.body.classList.contains('no-pdf')")
+    hit = page.evaluate(f"() => fetch('/api/synctex?file=main.tex&line={line}').then(r => r.json())")
+    back = page.evaluate(f"() => fetch('/api/synctex?page={hit['page']}&x=100&y={hit['y']}').then(r => r.json())")
+    assert back == {"file": "main.tex", "line": line}
+    # double-click on the mark's spot moves the cursor back to that line
+    place(page, 0)
+    box = page.locator(".pdf-mark").bounding_box()
+    page.mouse.dblclick(box["x"] + box["width"] / 3, box["y"] + 11 * box["height"] / (hit["y2"] - hit["y"] + 14) if hit["y2"] > hit["y"] else box["y"] + box["height"] - 3)
+    page.wait_for_function(f"() => {{ const v = window.__ltx.view(); return v.state.doc.lineAt(v.state.selection.main.head).number === {line}; }}")
+
+
+def test_pdfjs_and_katex_load_only_when_used(browser, copy_doc, serve):
+    root = copy_doc("multi")
+    s = serve(root / "main.tex")
+    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    urls = []
+    page.on("request", lambda r: urls.append(r.url))
+    page.goto(s.url)
+    page.wait_for_function("() => window.__ltx && window.__ltx.syncs.size > 0")
+    page.wait_for_timeout(500)
+    assert not [u for u in urls if "/chunks/" in u or "katex" in u]  # LaTeX on, PDF off: neither is needed
+    page.click("#latex")
+    page.wait_for_function("() => document.body.classList.contains('word')")
+    assert any("/chunks/katex-" in u for u in urls) and any("katex.min.css" in u for u in urls)
+    assert not any("/chunks/pdf-" in u for u in urls)
+    page.click("#pdf")
+    page.wait_for_selector(".pdf-page canvas", timeout=60000)
+    assert any("/chunks/pdf-" in u for u in urls)
+
+
+def test_typing_a_heading_rebuilds_structure_prose_typing_shifts_it(browser, copy_doc, serve):
+    root = copy_doc("short")
+    s = serve(root / "main.tex")
+    page = open_page(browser, s, pdf=False)
+    page.evaluate("() => window.__ltx.hold(true)")
+    text = doc(page)
+    nums = lambda: page.evaluate("() => [...document.querySelectorAll('.sheet:not([hidden]) .ltx-secnum')].map(e => e.textContent)")
+    i = text.index("\\section{Part 2}")
+    page.evaluate("(i) => { const v = window.__ltx.view(); v.dispatch({effects: v.constructor.scrollIntoView(i, {y: 'center'})}); }", i)
+    page.wait_for_timeout(200)
+    before = nums()
+    assert "2" in before
+    place(page, i - 1)  # the blank line before Part 2
+    page.keyboard.press("Enter")
+    page.keyboard.type("\\section{Inserted}")
+    page.keyboard.press("Enter")
+    page.wait_for_function("() => [...document.querySelectorAll('.sheet:not([hidden]) .ltx-secnum')].some(e => e.textContent === '3')")
+    after = nums()
+    assert "2" in after and "3" in after  # Inserted is 2, Part 2 became 3
+    t = doc(page)
+    j = re.compile(r"^[A-Z][a-z]", re.M).search(t, t.index("\\section{Part 2}")).start()
+    place(page, j + 1)  # inside a prose line: typing words keeps the structure
+    page.keyboard.type("more words ")
+    assert nums() == after
