@@ -1,4 +1,4 @@
-"""Acceptance tests in a headless browser against scratch copies of the two real docs."""
+"""Acceptance tests in a headless browser against scratch copies of the two dummy docs."""
 import difflib
 import json
 import re
@@ -90,7 +90,7 @@ def snapshot(root: Path, names):
     return {n: ((root / n).read_bytes(), (root / n).stat().st_mtime_ns) for n in names}
 
 
-@pytest.mark.parametrize("name", ["tool", "short"])
+@pytest.mark.parametrize("name", ["report", "short"])
 def test_open_and_save_untouched_changes_nothing(browser, copy_doc, serve, name):
     root = copy_doc(name)
     before = snapshot(root, DOCS[name])
@@ -107,7 +107,7 @@ def test_open_and_save_untouched_changes_nothing(browser, copy_doc, serve, name)
 
 
 def test_edit_one_word_is_one_line_diff(browser, copy_doc, serve):
-    root = copy_doc("tool")
+    root = copy_doc("report")
     orig = (root / "main.tex").read_text()
     s = serve(root / "main.tex")
     page = open_page(browser, s)
@@ -127,38 +127,38 @@ def test_edit_one_word_is_one_line_diff(browser, copy_doc, serve):
 
 
 def test_external_edit_merges_with_unsaved_typing(browser, copy_doc, serve):
-    root = copy_doc("tool")
+    root = copy_doc("report")
     s = serve(root / "main.tex")
     page = open_page(browser, s)
     page.evaluate("() => window.__ltx.hold(true)")
     text = doc(page)
-    a = text.index("The boundary $-4.0$")  # paragraph A (later in the file)
+    a = text.index("The threshold $0.5$")  # paragraph A (later in the file)
     place(page, a)
     page.keyboard.type("ALPHA ")
     assert cursor(page) == a + 6
     # Claude-style Edit to an earlier paragraph B while A's typing is unsaved
     disk = (root / "main.tex").read_text()
-    b_old = "This document describes the commute tool"
+    b_old = "This document describes the survey instrument"
     assert disk.index(b_old) < a
-    (root / "main.tex").write_text(disk.replace(b_old, "This report documents the commute tool", 1))
+    (root / "main.tex").write_text(disk.replace(b_old, "This report documents the survey instrument", 1))
     wait_for(lambda: "This report documents" in doc(page), what="external merge")
     d = doc(page)
-    assert "ALPHA The boundary" in d
+    assert "ALPHA The threshold" in d
     assert d[:cursor(page)].endswith("ALPHA ")  # cursor stayed after the typed text
     assert page.locator("#replaced").is_hidden()
     page.keyboard.press("Meta+z")  # undo reverts only Daniel's typing, not the outside edit
     assert "ALPHA" not in doc(page) and "This report documents" in doc(page)
     page.keyboard.press("Meta+Shift+z")
     page.evaluate("() => window.__ltx.hold(false)")
-    wait_for(lambda: "ALPHA The boundary" in (root / "main.tex").read_text(), what="save after merge")
+    wait_for(lambda: "ALPHA The threshold" in (root / "main.tex").read_text(), what="save after merge")
     final = (root / "main.tex").read_text()
-    assert "This report documents the commute tool" in final
+    assert "This report documents the survey instrument" in final
     assert final == doc(page)
     assert not page.errors
 
 
 def test_same_region_collision_disk_wins_and_text_is_surfaced(browser, copy_doc, serve):
-    root = copy_doc("tool")
+    root = copy_doc("report")
     s = serve(root / "main.tex")
     page = open_page(browser, s)
     page.evaluate("() => window.__ltx.hold(true)")
@@ -182,14 +182,14 @@ def test_same_region_collision_disk_wins_and_text_is_surfaced(browser, copy_doc,
 
 
 def test_typing_is_local_and_fast(browser, copy_doc, serve):
-    root = copy_doc("tool")
+    root = copy_doc("report")
     s = serve(root / "main.tex")
     page = open_page(browser, s)
     frames = []
     page.on("websocket", lambda ws: ws.on("framesent", lambda f: frames.append((time.time(), f))))
     page.reload()
     page.wait_for_function("() => window.__ltx && window.__ltx.syncs.size > 0")
-    place(page, doc(page).index("The boundary $-4.0$"))
+    place(page, doc(page).index("The threshold $0.5$"))
     t0 = time.time()
     page.keyboard.type("typing without any round trip ", delay=25)
     t1 = time.time()
@@ -209,7 +209,7 @@ def test_typing_is_local_and_fast(browser, copy_doc, serve):
     assert ms < 16
 
 
-@pytest.mark.parametrize("name", ["tool", "short"])
+@pytest.mark.parametrize("name", ["report", "short"])
 def test_background_compile_succeeds(browser, copy_doc, serve, name):
     root = copy_doc(name)
     (root / "main.pdf").unlink(missing_ok=True)
@@ -270,7 +270,7 @@ def test_ltx_open_launches_server_and_browser(copy_doc, tmp_path):
 
 
 def test_pdf_hidden_by_default_then_shown_by_button(browser, copy_doc, serve):
-    root = copy_doc("tool")
+    root = copy_doc("report")
     s = serve(root / "main.tex")
     page = open_page(browser, s, pdf=False)
     assert not page.locator("#pdf-pane").is_visible()
@@ -283,7 +283,7 @@ def test_pdf_hidden_by_default_then_shown_by_button(browser, copy_doc, serve):
 
 
 def test_latex_toggle_keeps_doc_and_typing_hits_source(browser, copy_doc, serve):
-    root = copy_doc("tool")
+    root = copy_doc("report")
     s = serve(root / "main.tex")
     page = open_page(browser, s)
     before = doc(page)
@@ -307,25 +307,25 @@ def test_latex_toggle_keeps_doc_and_typing_hits_source(browser, copy_doc, serve)
 
 
 def test_rendered_math_and_tables_keep_doc_identical_and_click_reveals(browser, copy_doc, serve):
-    root = copy_doc("methodology")
+    root = copy_doc("multi")
     s = serve(root / "main.tex")
     page = open_page(browser, s)
-    page.click("#tabs button[data-path='sec_validation.tex']")
-    before = doc(page, "sec_validation.tex")
+    page.click("#tabs button[data-path='sec_results.tex']")
+    before = doc(page, "sec_results.tex")
     page.click("#latex")
     page.wait_for_selector(".ltx-table table.ltx-tbl", state="attached")
     page.wait_for_selector(".ltx-mac", state="attached", timeout=60000)  # macros arrive with the first compile
     assert page.locator(".ltx-im .katex").count() > 0
     assert page.locator(".ltx-table td").count() > 5
-    assert doc(page, "sec_validation.tex") == before
+    assert doc(page, "sec_results.tex") == before
     j = re.search(r"\\begin\{(long)?table", before).start()
-    page.evaluate("""(j) => { const v = window.__ltx.view('sec_validation.tex'); v.dispatch({effects: v.constructor.scrollIntoView(j, {y: 'start', yMargin: 100})}); }""", j)
+    page.evaluate("""(j) => { const v = window.__ltx.view('sec_results.tex'); v.dispatch({effects: v.constructor.scrollIntoView(j, {y: 'start', yMargin: 100})}); }""", j)
     page.wait_for_timeout(500)
     page.locator(".sheet:not([hidden]) .ltx-table").first.click()  # click reveals the source at that block
     assert page.evaluate("() => document.body.classList.contains('word')") is False
-    head = cursor(page, "sec_validation.tex")
+    head = cursor(page, "sec_results.tex")
     assert re.match(r"\\begin\{(long)?table|\\begin\{tabular|\\begin\{threepart", before[head:head + 30])
-    assert doc(page, "sec_validation.tex") == before
+    assert doc(page, "sec_results.tex") == before
 
 
 def top_y(page):
@@ -333,7 +333,7 @@ def top_y(page):
 
 
 def test_toggle_keeps_cursor_line_in_place(browser, copy_doc, serve):
-    root = copy_doc("methodology")
+    root = copy_doc("multi")
     s = serve(root / "main.tex")
     page = open_page(browser, s)
     page.wait_for_timeout(1500)
@@ -355,7 +355,7 @@ def test_toggle_keeps_cursor_line_in_place(browser, copy_doc, serve):
 
 
 def test_sliders_are_view_only(browser, copy_doc, serve):
-    root = copy_doc("methodology")
+    root = copy_doc("multi")
     s = serve(root / "main.tex")
     page = open_page(browser, s)
     before = doc(page)
@@ -401,7 +401,7 @@ def test_ltx_stop_kills_server_and_clears_session(copy_doc):
 
 
 def test_column_width_slider_in_screen_percent(browser, copy_doc, serve):
-    root = copy_doc("methodology")
+    root = copy_doc("multi")
     s = serve(root / "main.tex")
     page = browser.new_page(viewport={"width": 1400, "height": 900}, screen={"width": 1400, "height": 900})
     page.goto(s.url)
@@ -446,7 +446,7 @@ def read_sidecar(root, name, key):
 
 
 def review_setup(browser, copy_doc, serve):
-    root = copy_doc("methodology")
+    root = copy_doc("multi")
     s = serve(root / "main.tex")
     page = open_page(browser, s)
     text = doc(page)
@@ -495,7 +495,7 @@ def test_suggestion_discuss(browser, copy_doc, serve):
 
 
 def test_selection_comment_written_to_comments_json(browser, copy_doc, serve):
-    root = copy_doc("methodology")
+    root = copy_doc("multi")
     s = serve(root / "main.tex")
     page = open_page(browser, s)
     text = doc(page)
@@ -516,7 +516,7 @@ def test_selection_comment_written_to_comments_json(browser, copy_doc, serve):
 
 
 def test_typed_quote_becomes_latex_quotes(browser, copy_doc, serve):
-    root = copy_doc("methodology")
+    root = copy_doc("multi")
     s = serve(root / "main.tex")
     page = open_page(browser, s)
     text = doc(page)
@@ -544,7 +544,7 @@ def test_typed_quote_becomes_latex_quotes(browser, copy_doc, serve):
 
 
 def test_rendered_widgets_fit_the_column(browser, copy_doc, serve):
-    root = copy_doc("methodology")
+    root = copy_doc("multi")
     s = serve(root / "main.tex")
     page = browser.new_page(viewport={"width": 1400, "height": 900}, screen={"width": 1400, "height": 900})
     page.goto(s.url)
@@ -553,7 +553,7 @@ def test_rendered_widgets_fit_the_column(browser, copy_doc, serve):
     page.evaluate("""() => { for (const [id, v] of [['fs', '24'], ['cw', '50']]) {
         const e = document.getElementById(id); e.value = v; e.dispatchEvent(new Event('input')); } }""")
     scaled = 0
-    for tab in ("sec_validation.tex", "app_b_validation.tex", "app_a_pipeline.tex", "sec_selection.tex"):
+    for tab in ("sec_results.tex", "app_tables.tex", "app_pipeline.tex", "sec_design.tex"):
         page.click(f"#tabs button[data-path='{tab}']")
         text = doc(page, tab)
         for m in re.finditer(r"\\begin\{(table|longtable|equation|align)", text):
@@ -571,7 +571,7 @@ def test_rendered_widgets_fit_the_column(browser, copy_doc, serve):
 
 
 def test_mouse_drag_selection_comment_quotes_whole_selection(browser, copy_doc, serve):
-    root = copy_doc("methodology")
+    root = copy_doc("multi")
     s = serve(root / "main.tex")
     page = open_page(browser, s)
     text = doc(page)
@@ -592,7 +592,7 @@ def test_mouse_drag_selection_comment_quotes_whole_selection(browser, copy_doc, 
 
 
 def test_export_copies_flattened_live_buffer(browser, copy_doc, serve):
-    root = copy_doc("tool")
+    root = copy_doc("report")
     s = serve(root / "main.tex")
     ctx = browser.new_context(viewport={"width": 1400, "height": 900}, permissions=["clipboard-read", "clipboard-write"])
     page = ctx.new_page()
@@ -611,7 +611,7 @@ def test_export_copies_flattened_live_buffer(browser, copy_doc, serve):
 
 
 def test_appendix_numbering_carries_into_input_file(browser, copy_doc, serve):
-    root = copy_doc("tool")
+    root = copy_doc("report")
     s = serve(root / "main.tex")
     page = open_page(browser, s, pdf=False)
     page.click("#tabs button[data-path='appendix_prompts.tex']")

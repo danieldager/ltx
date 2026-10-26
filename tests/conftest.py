@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pytest
 
-FIXTURES = Path(__file__).parent / "fixtures"  # frozen snapshots; tests never touch real documents
-DOCS = {"tool": ["main.tex", "appendix_prompts.tex"], "short": ["main.tex", "final20_table.tex"]}
+FIXTURES = Path(__file__).parent / "fixtures"  # neutral dummy documents
+DOCS = {"report": ["main.tex", "appendix_prompts.tex"], "short": ["main.tex", "claims_table.tex"]}
 
 
 @pytest.fixture
 def copy_doc(tmp_path):
-    """Scratch copy of a real doc (the originals are never touched)."""
+    """Scratch copy of a fixture doc (the originals are never touched)."""
     def make(name: str) -> Path:
         dst = tmp_path / name
         shutil.copytree(FIXTURES / name, dst, ignore=shutil.ignore_patterns(".ltxed"))

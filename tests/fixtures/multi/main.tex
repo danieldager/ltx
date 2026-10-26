@@ -1,0 +1,60 @@
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[letterpaper,margin=1.1in]{geometry}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{threeparttable}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage[round,authoryear]{natbib}
+\usepackage{setspace}
+\usepackage[hidelinks]{hyperref}
+\onehalfspacing
+\setlength{\parindent}{1.3em}
+\lstset{basicstyle=\ttfamily\scriptsize,breaklines=true,frame=single}
+\newcommand{\toconfirm}[1]{\textcolor{red}{[TO CONFIRM: #1]}}
+\newcommand{\tbc}[1]{\textcolor{red}{[TO BE COMPLETED: #1]}}
+\newcommand{\tc}[1]{\toconfirm{#1}}
+\newcommand{\ci}[2]{[#1,\,#2]}
+\newcommand{\cell}[1]{\multicolumn{1}{c}{#1}}
+\DeclareMathOperator{\E}{\mathbb{E}}
+
+\title{[TO BE COMPLETED: paper title]}
+\author{[TO BE COMPLETED: authors]}
+\date{Draft of 1 January 2026}
+\begin{document}
+\maketitle
+\begin{abstract}\noindent
+\tbc{abstract. The text below is a placeholder.}
+A typical resident suggests a stable pattern that survives alternative definitions of the treatment period, once we control for population density. Local planners suggests the share of workers who switch from driving to cycling after construction, and the result does not depend on outliers. The commuting survey estimates the cost of construction relative to the recorded benefits for households, and the result does not depend on outliers. A typical resident documents the share of workers who switch from driving to cycling after construction, given the limits of the survey instrument.
+\end{abstract}
+
+% The text below is the methodology section of the paper, numbered as Section 2.
+\setcounter{section}{1}
+
+\section{Methodology}\label{sec:method}
+
+This section describes the study design (Section~\ref{sec:design}), the main results (Section~\ref{sec:res}) and the appendices. Appendix~\ref{app:pipeline} lists every step and Appendix~\ref{app:tables} the full tables. Items we could not resolve are marked in red: \toconfirm{items that need confirmation}.
+
+\input{sec_design}
+\input{sec_results}
+
+\clearpage
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\clearpage
+\appendix
+\input{app_pipeline}
+\clearpage
+\input{app_tables}
+\clearpage
+\input{app_prompts}
+
+\end{document}

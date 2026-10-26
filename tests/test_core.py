@@ -14,7 +14,7 @@ from conftest import FIXTURES
 
 
 def test_diff_roundtrip_random_edits():
-    base = (FIXTURES / "tool" / "main.tex").read_text()
+    base = (FIXTURES / "report" / "main.tex").read_text()
     rng = random.Random(0)
     for _ in range(30):
         new = base
@@ -27,7 +27,7 @@ def test_diff_roundtrip_random_edits():
 
 
 def test_diff_is_local_inside_long_line():
-    base = (FIXTURES / "tool" / "main.tex").read_text()
+    base = (FIXTURES / "report" / "main.tex").read_text()
     line = max(base.splitlines(), key=len)
     word = line.split()[20]
     new = base.replace(line, line.replace(" " + word + " ", " WORD ", 1), 1)
